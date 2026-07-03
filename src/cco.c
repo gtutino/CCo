@@ -1,48 +1,6 @@
-#include <stdint.h>
-#include <stdlib.h>
-#include <stdio.h>
-#include <assert.h>
-#include <stdarg.h>
-#include <threads.h>
 #include "../include/cco.h"
 
-// Coroutines has fixed stack size
-#define COROUTINE_STACK_BYTESIZE 4096
-
-typedef enum {
-    NOT_RUNNING,
-    RUNNING,
-    BLOCKED,
-} Coroutine_State;
-
-typedef struct {
-    Coroutine_State state;
-
-    // Registers
-    uint64_t rsp;
-    uint64_t rbp;
-    uint64_t rip;
-
-    uint64_t rbx;
-    uint64_t r12;
-    uint64_t r13;
-    uint64_t r14;
-    uint64_t r15;
-
-    // Stack saved as is
-    uint8_t stack[COROUTINE_STACK_BYTESIZE];
-} Coroutine_Ctx;
-
-// Circular linked list of coroutines contexts
-typedef struct Ctx_Node Ctx_Node;
-struct Ctx_Node {
-    Ctx_Node *next;
-    Coroutine_Ctx ctx;
-};
-
-// This is necessary, so each coroutine knows where to look
-// when it need to do context switch
-static thread_local Ctx_Node *current_running = NULL;
+thread_local Ctx_Node *current_running = NULL;
 
 void *cco_malloc(size_t size) {
     void *ptr = malloc(size);
@@ -62,13 +20,7 @@ void cco_clean(void) {
     exit(0);
 }
 
-
-void cco_run(void (*func)(void), size_t num_args, ...) {
-
-    // Save current context
-    if (current_running != NULL) {
-        // TODO: save the state of the current coroutine
-    }
+void __cco_run(void (*func)(void), size_t num_args, ...) {
 
     // Allocate the new coroutine node and link in the linked list
     Ctx_Node *coroutine = cco_malloc(sizeof(Ctx_Node));
@@ -83,6 +35,7 @@ void cco_run(void (*func)(void), size_t num_args, ...) {
 
     // Start the coroutine
     assert(num_args <= 6 && "The coroutines supports max 6 args for now!\n");
+    coroutine->ctx.state = RUNNING;
 
     va_list args;
     va_start(args, num_args);
