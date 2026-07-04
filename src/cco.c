@@ -17,11 +17,10 @@ typedef enum {
 } Coroutine_State;
 
 typedef struct {
-    // Registers
+    // Registers (order here matters in the asm procedures)
     uint64_t rsp;
     uint64_t rbp;
     uint64_t rip;
-
     uint64_t rbx;
     uint64_t r12;
     uint64_t r13;
@@ -41,16 +40,8 @@ struct Ctx_Node {
     Coroutine_Ctx ctx;
 };
 
-// This is necessary, so each coroutine knows where to look
-// when it need to do context switch
+// This is necessary, so each coroutine knows where to look when it need to do context switch
 static thread_local Ctx_Node *current_running = NULL;
-
-// Asm defined functions
-void cco_save_ctx(Coroutine_Ctx *ctx);
-void cco_yield_run_next(Coroutine_Ctx *ctx);
-void cco_start(uint64_t rsp, void (*func)(void), void (*cco_clean)(void), uint64_t *arg);
-
-void cco_yield_swap(void);
 
 // OOM is handle by simply aborting
 void *cco_malloc(size_t size) {
@@ -62,31 +53,15 @@ void *cco_malloc(size_t size) {
     return ptr;
 }
 
-// TODO: special function that should be called when a coroutine terminates
-// so its address should be set in the stack befor rbp.
-// So on termination the heap space will be cleaned and also the coroutine removed from CCo_Ctx.
-// Then it switched to the next, if there is not it terminates the program.
-void cco_clean(void) {
-    // If there are no other coroutines just exit
-    if (current_running->next == current_running) {
-        exit(0);
-    }
+// Asm defined functions
+void cco_save_ctx(Coroutine_Ctx *ctx);
+void cco_yield_run_next(Coroutine_Ctx *ctx);
+void cco_start(uint64_t rsp, void (*func)(void), void (*cco_clean)(void), uint64_t *arg);
 
-    // Find the prev coroutine in the list
-    Ctx_Node *prev = current_running->next;
-    while (prev->next != current_running) {
-        prev = prev->next;
-    }
+// Special function that is called by each coroutine when it ends.
+// It just clean up the allocated ctx and switch to the next coroutine.
+void cco_clean(void);
 
-    // Remove the coroutine from the linked list
-    prev->next = current_running->next;
-
-    // Free the ctx
-    Ctx_Node *to_free = current_running;
-    current_running = prev;
-    free(to_free);
-    cco_yield_swap();
-}
 
 void cco_run_impl(void (*func)(void), size_t num_args, ...) {
     // Save current coroutine context
@@ -143,10 +118,35 @@ void cco_yield_swap(void) {
     cco_yield_run_next(&current_running->ctx);
 }
 
+
 void cco_yield(void) {
     // Save current coroutine context
     cco_save_ctx(&current_running->ctx);
     current_running->ctx.status = NOT_RUNNING;
 
+    cco_yield_swap();
+}
+
+
+void cco_clean(void) {
+    // If there are no other coroutines just exit
+    if (current_running->next == current_running) {
+        free(current_running);
+        exit(0);
+    }
+
+    // Find the prev coroutine in the list
+    Ctx_Node *prev = current_running->next;
+    while (prev->next != current_running) {
+        prev = prev->next;
+    }
+
+    // Remove the coroutine from the linked list
+    prev->next = current_running->next;
+
+    // Free the ctx
+    Ctx_Node *to_free = current_running;
+    current_running = prev;
+    free(to_free);
     cco_yield_swap();
 }
