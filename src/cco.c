@@ -45,10 +45,14 @@ struct Ctx_Node {
 // when it need to do context switch
 static thread_local Ctx_Node *current_running = NULL;
 
+// Asm defined functions
 void cco_save_ctx(Coroutine_Ctx *ctx);
 void cco_yield_run_next(Coroutine_Ctx *ctx);
 void cco_start(uint64_t rsp, void (*func)(void), void (*cco_clean)(void), uint64_t *arg);
 
+void cco_yield_swap(void);
+
+// OOM is handle by simply aborting
 void *cco_malloc(size_t size) {
     void *ptr = malloc(size);
     if (ptr == NULL) {
@@ -63,8 +67,25 @@ void *cco_malloc(size_t size) {
 // So on termination the heap space will be cleaned and also the coroutine removed from CCo_Ctx.
 // Then it switched to the next, if there is not it terminates the program.
 void cco_clean(void) {
-    printf("COROUTINE FINISH\n");
-    exit(0);
+    // If there are no other coroutines just exit
+    if (current_running->next == current_running) {
+        exit(0);
+    }
+
+    // Find the prev coroutine in the list
+    Ctx_Node *prev = current_running->next;
+    while (prev->next != current_running) {
+        prev = prev->next;
+    }
+
+    // Remove the coroutine from the linked list
+    prev->next = current_running->next;
+
+    // Free the ctx
+    Ctx_Node *to_free = current_running;
+    current_running = prev;
+    free(to_free);
+    cco_yield_swap();
 }
 
 void cco_run_impl(void (*func)(void), size_t num_args, ...) {
@@ -104,13 +125,8 @@ void cco_run_impl(void (*func)(void), size_t num_args, ...) {
     cco_start(rsp, func, cco_clean, arg);
 }
 
-void cco_yield(void) {
-    // Save current coroutine context
-    if (current_running != NULL) {
-        cco_save_ctx(&current_running->ctx);
-        current_running->ctx.status = NOT_RUNNING;
-    }
 
+void cco_yield_swap(void) {
     // Find the next coroutine
     bool found = false;
     Ctx_Node *next_coroutine = current_running;
@@ -125,4 +141,12 @@ void cco_yield(void) {
 
     // Run it
     cco_yield_run_next(&current_running->ctx);
+}
+
+void cco_yield(void) {
+    // Save current coroutine context
+    cco_save_ctx(&current_running->ctx);
+    current_running->ctx.status = NOT_RUNNING;
+
+    cco_yield_swap();
 }

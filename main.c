@@ -10,9 +10,7 @@ void foo(int c) {
     printf("ABOBA\n");
 }
 
-void func(int a, int b) {
-    cco_run(foo, 1, 1);
-
+void bar(int a, int b) {
     printf("Ciao\n");
     cco_yield();
 
@@ -28,10 +26,21 @@ void func(int a, int b) {
     b++;
     printf("%d %d\n", a, b);
     cco_yield();
+
+    a++;
+    b++;
+    printf("%d %d\n", a, b);
+    printf("FINE\n");
+}
+
+
+void cco_main(void) {
+    cco_run(foo, 1, 1);
+    cco_run(bar, 2, 2, 3);
+    cco_yield();
+    printf("ciao cco_main\n");
 }
 
 int main(void) {
-    cco_run(func, 3, 2, 3);
-
-    return 0;
+    cco_run(cco_main, 0, 0);
 }
