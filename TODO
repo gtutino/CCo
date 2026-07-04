@@ -1,4 +1,3 @@
-- Test and fix issues for now, with tests.
 - After testing well I can start implementing the message passing using the other notes i wrote.
 - Then I can test the message passing in a single thread way.
 - After this I can implement multithreading, giving each thread its own coroutines circular linked list (and using locks for message passing).
