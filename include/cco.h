@@ -1,6 +1,8 @@
 #ifndef CCO_LIB_
 #define CCO_LIB_
 
+#include <stddef.h>
+
 // Stackful Coroutine implementation in C.
 // This is the public interface of the library.
 
