@@ -1,47 +1,19 @@
-#include <stdint.h>
+#include "coroutine.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
-#include <stdbool.h>
 #include <stdarg.h>
-#include <threads.h>
-#include "../include/cco.h"
+#include <stdbool.h>
 
-// Coroutines has fixed stack size
-#define COROUTINE_STACK_BYTESIZE 4096
+// Asm defined functions
+void cco_save_ctx(Coroutine_Ctx *ctx);
+void cco_yield_run_next(Coroutine_Ctx *ctx);
+void cco_start(uint64_t rsp, void (*func)(void), void (*cco_clean)(void), uint64_t *arg);
 
-typedef enum {
-    NOT_RUNNING,
-    RUNNING,
-    BLOCKED,
-} Coroutine_State;
+// Special function that is called by each coroutine when it ends.
+// It just clean up the allocated ctx and switch to the next coroutine.
+void cco_clean(void);
 
-typedef struct {
-    // Registers (order here matters in the asm procedures)
-    uint64_t rsp;
-    uint64_t rbp;
-    uint64_t rip;
-    uint64_t rbx;
-    uint64_t r12;
-    uint64_t r13;
-    uint64_t r14;
-    uint64_t r15;
-
-    Coroutine_State status;
-
-    // Stack saved as is
-    uint8_t stack[COROUTINE_STACK_BYTESIZE];
-} Coroutine_Ctx;
-
-// Circular linked list of coroutines contexts
-typedef struct Ctx_Node Ctx_Node;
-struct Ctx_Node {
-    Ctx_Node *next;
-    Coroutine_Ctx ctx;
-};
-
-// This is necessary, so each coroutine knows where to look when it need to do context switch
-static thread_local Ctx_Node *current_running = NULL;
 
 // OOM is handle by simply aborting
 void *cco_malloc(size_t size) {
@@ -52,15 +24,6 @@ void *cco_malloc(size_t size) {
     }
     return ptr;
 }
-
-// Asm defined functions
-void cco_save_ctx(Coroutine_Ctx *ctx);
-void cco_yield_run_next(Coroutine_Ctx *ctx);
-void cco_start(uint64_t rsp, void (*func)(void), void (*cco_clean)(void), uint64_t *arg);
-
-// Special function that is called by each coroutine when it ends.
-// It just clean up the allocated ctx and switch to the next coroutine.
-void cco_clean(void);
 
 
 void cco_run_impl(void (*func)(void), size_t num_args, ...) {

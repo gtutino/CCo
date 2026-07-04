@@ -1,5 +1,5 @@
-#ifndef CCO_LIB_
-#define CCO_LIB_
+#ifndef CCO_LIB_H
+#define CCO_LIB_H
 
 #include <stddef.h>
 
