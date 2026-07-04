@@ -47,6 +47,7 @@ static thread_local Ctx_Node *current_running = NULL;
 
 void cco_save_ctx(Coroutine_Ctx *ctx);
 void cco_yield_run_next(Coroutine_Ctx *ctx);
+void cco_start(uint64_t rsp, void (*func)(void), void (*cco_clean)(void), uint64_t *arg);
 
 void *cco_malloc(size_t size) {
     void *ptr = malloc(size);
@@ -100,30 +101,7 @@ void cco_run_impl(void (*func)(void), size_t num_args, ...) {
     stack_top = stack_top & -16LL; // 16-byte alignment required by ABI
     uint64_t rsp = (uint64_t)(stack_top - 8);
 
-    // AT&T syntax: instr source, dest
-    __asm__ __volatile__ (
-        // New stack
-        "movq %0, %%rsp\n\t"
-        "movq %0, %%rbp\n\t"
-
-        // Set rip to cco_clean
-        "pushq %3\n\t"
-
-        // Arguments
-        "movq 0(%2), %%rdi\n\t"
-        "movq 8(%2), %%rsi\n\t"
-        "movq 16(%2), %%rdx\n\t"
-        "movq 24(%2), %%rcx\n\t"
-        "movq 32(%2), %%r8\n\t"
-        "movq 40(%2), %%r9\n\t"
-
-        // "Call" the function
-        "jmp *%1\n\t"
-
-        :                                                    // Dest
-        : "r" (rsp), "r" (func), "r" (arg), "r" (cco_clean)  // Source
-        : "rdi", "rsi", "rdx", "rcx", "r8", "r9"             // Clobber list
-    );
+    cco_start(rsp, func, cco_clean, arg);
 }
 
 void cco_yield(void) {
