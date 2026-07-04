@@ -1,4 +1,5 @@
 #include "coroutine.h"
+#include "common.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <assert.h>
@@ -12,19 +13,7 @@ void cco_start(uint64_t rsp, void (*func)(void), void (*cco_clean)(void), uint64
 
 // Special function that is called by each coroutine when it ends.
 // It just clean up the allocated ctx and switch to the next coroutine.
-void cco_clean(void);
-
-
-// OOM is handle by simply aborting
-void *cco_malloc(size_t size) {
-    void *ptr = malloc(size);
-    if (ptr == NULL) {
-        fprintf(stderr, "[ERROR]: OOM error when allocating %zu bytes, aborting.\n", size);
-        exit(1);
-    }
-    return ptr;
-}
-
+static void cco_clean(void);
 
 void cco_run_impl(void (*func)(void), size_t num_args, ...) {
     // Save current coroutine context
@@ -64,7 +53,7 @@ void cco_run_impl(void (*func)(void), size_t num_args, ...) {
 }
 
 
-void cco_yield_swap(void) {
+static void cco_yield_swap(void) {
     // Find the next coroutine
     bool found = false;
     Ctx_Node *next_coroutine = current_running;
@@ -91,7 +80,7 @@ void cco_yield(void) {
 }
 
 
-void cco_clean(void) {
+static void cco_clean(void) {
     // If there are no other coroutines just exit
     if (current_running->next == current_running) {
         free(current_running);
