@@ -1,5 +1,5 @@
 .global cco_save_ctx
-.global cco_yield_run_next
+.global cco_switch_ctx
 .global cco_start
 
 // Save the registers to the coroutine ctx.
@@ -36,7 +36,7 @@ cco_save_ctx:
 
 // Restore the registers from courutine ctx.
 // First arg (rdi) contains the pointer to 'current_running->ctx'.
-cco_yield_run_next:
+cco_switch_ctx:
     movq 0(%rdi), %rsp
     movq 8(%rdi), %rbp
     movq 24(%rdi), %rbx

@@ -10,7 +10,7 @@ thread_local Ctx_Node *current_running = NULL;
 
 // Asm defined functions
 void cco_save_ctx(Coroutine_Ctx *ctx);
-void cco_yield_run_next(Coroutine_Ctx *ctx);
+void cco_switch_ctx(Coroutine_Ctx *ctx);
 void cco_start(uint64_t rsp, void (*func)(void), void (*cco_clean)(void), uint64_t *arg);
 
 // Special function that is called by each coroutine when it ends.
@@ -66,8 +66,8 @@ void cco_run_impl(void (*func)(void), ...) {
 }
 
 
-static void cco_yield_swap(void) {
-    // Find the next coroutine
+// Find the next available coroutine and update current_running to it
+static void cco_set_next_current_running(void) {
     bool found = false;
     Ctx_Node *next_coroutine = current_running;
     while (!found) {
@@ -78,9 +78,6 @@ static void cco_yield_swap(void) {
             found = true;
         }
     }
-
-    // Run it
-    cco_yield_run_next(&current_running->ctx);
 }
 
 
@@ -94,7 +91,8 @@ void cco_yield(void) {
         current_running->ctx.status = NOT_RUNNING;
     }
 
-    cco_yield_swap();
+    cco_set_next_current_running();
+    cco_switch_ctx(&current_running->ctx);
 }
 
 
@@ -118,5 +116,8 @@ static void cco_clean(void) {
     Ctx_Node *to_free = current_running;
     current_running = prev;
     free(to_free);
-    cco_yield_swap();
+
+    // Run the next one
+    cco_set_next_current_running();
+    cco_switch_ctx(&current_running->ctx);
 }

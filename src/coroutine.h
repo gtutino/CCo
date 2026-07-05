@@ -31,7 +31,7 @@ typedef struct {
     uint8_t stack[COROUTINE_STACK_BYTESIZE];
 } Coroutine_Ctx;
 
-// Circular linked list of coroutines contexts
+// Circular list of coroutines contexts
 typedef struct Ctx_Node Ctx_Node;
 struct Ctx_Node {
     Ctx_Node *next;
