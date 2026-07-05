@@ -39,6 +39,6 @@ struct Ctx_Node {
 };
 
 // This is necessary, so each coroutine knows where to look when it need to do context switch
-static thread_local Ctx_Node *current_running = NULL;
+extern thread_local Ctx_Node *current_running;
 
 #endif

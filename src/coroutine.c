@@ -6,6 +6,8 @@
 #include <stdarg.h>
 #include <stdbool.h>
 
+thread_local Ctx_Node *current_running = NULL;
+
 // Asm defined functions
 void cco_save_ctx(Coroutine_Ctx *ctx);
 void cco_yield_run_next(Coroutine_Ctx *ctx);
@@ -74,7 +76,12 @@ static void cco_yield_swap(void) {
 void cco_yield(void) {
     // Save current coroutine context
     cco_save_ctx(&current_running->ctx);
-    current_running->ctx.status = NOT_RUNNING;
+
+    // If we call yield when blocking for a message the
+    // state shouldn't be changed
+    if (current_running->ctx.status == RUNNING) {
+        current_running->ctx.status = NOT_RUNNING;
+    }
 
     cco_yield_swap();
 }

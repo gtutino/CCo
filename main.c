@@ -2,43 +2,23 @@
 #include <stdlib.h>
 #include "include/cco.h"
 
-void foo(int c) {
-    printf("%d\n", c);
-    cco_yield();
-    printf("%d\n", c + 1);
-    cco_yield();
-    printf("ABOBA\n");
+void worker(CCo_Channel *chan, int x) {
+    for (int i = x; i < x + 10; i++) {
+        cco_send(chan, &i);
+    }
 }
-
-void bar(int a, int b) {
-    printf("Ciao\n");
-    cco_yield();
-
-    a++;
-    b++;
-    printf("%d %d\n", a, b);
-
-    a++;
-    b++;
-    printf("%d %d\n", a, b);
-
-    a++;
-    b++;
-    printf("%d %d\n", a, b);
-    cco_yield();
-
-    a++;
-    b++;
-    printf("%d %d\n", a, b);
-    printf("FINE\n");
-}
-
 
 void cco_main(void) {
-    cco_run(foo, 1, 1);
-    cco_run(bar, 2, 2, 3);
-    cco_yield();
-    printf("ciao cco_main\n");
+    CCo_Channel *chan = cco_make_chan(sizeof(int));
+    cco_run(worker, 2, chan, 3);
+    cco_run(worker, 2, chan, 10);
+    cco_run(worker, 2, chan, 27);
+    cco_run(worker, 2, chan, 43);
+    for (int i = 0; i < 40; i++) {
+        int j;
+        cco_recv(chan, &j);
+        printf("Recived %d\n", j);
+    }
 }
 
 int main(void) {

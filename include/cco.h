@@ -28,6 +28,6 @@ typedef struct CCo_Channel CCo_Channel;
 
 CCo_Channel *cco_make_chan(size_t payload_size);
 void cco_send(CCo_Channel *chan, void *data);
-void cco_recv(CCo_Channel *chan, void *data);
+void cco_recv(CCo_Channel *chan, void *dest);
 
 #endif
