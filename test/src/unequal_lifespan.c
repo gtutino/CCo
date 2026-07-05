@@ -13,10 +13,10 @@ void long_lived(void) {
 }
 
 void cco_main(void) {
-    cco_run(short_lived, 0, 0);
-    cco_run(long_lived, 0, 0);
+    cco_run(short_lived, 0);
+    cco_run(long_lived, 0);
 }
 
 int main(void) {
-    cco_run(cco_main, 0, 0);
+    cco_init(cco_main, 0, NULL, 1);
 }

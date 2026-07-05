@@ -1,4 +1,4 @@
-CFLAGS=-Wall -Wextra -std=c99 -pedantic -Werror=vla -fno-omit-frame-pointer -DCCO_THREADS_NUM=$(nproc) -ggdb
+CFLAGS=-Wall -Wextra -std=c99 -pedantic -Werror=vla -fno-omit-frame-pointer -ggdb
 # -fno-omit-frame-pointer ensures that the compiler keeps the base stack pointer
 
 all: main test

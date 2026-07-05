@@ -14,5 +14,5 @@ void cco_main(void) {
 }
 
 int main(void) {
-    cco_run(cco_main, 0, 0);
+    cco_init(cco_main, 0, NULL, 1);
 }

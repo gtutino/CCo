@@ -17,7 +17,15 @@ void cco_start(uint64_t rsp, void (*func)(void), void (*cco_clean)(void), uint64
 // It just clean up the allocated ctx and switch to the next coroutine.
 static void cco_clean(void);
 
-void cco_run_impl(void (*func)(void), size_t num_args, ...) {
+
+void cco_init(void (*cco_main)(void), int argc, char **argv, size_t threads_num) {
+    // TODO: Create threads
+    (void) threads_num;
+    cco_run(cco_main, 2, argc, argv);
+}
+
+
+void cco_run_impl(void (*func)(void), ...) {
     // Save current coroutine context
     if (current_running != NULL) {
         cco_save_ctx(&current_running->ctx);
@@ -37,14 +45,17 @@ void cco_run_impl(void (*func)(void), size_t num_args, ...) {
     coroutine->ctx.status = RUNNING;
 
     // Start the coroutine
+    va_list args;
+    va_start(args, func);
+
+    size_t num_args = va_arg(args, size_t);
     assert(num_args <= 6 && "The coroutines supports max 6 args for now!\n");
 
-    va_list args;
-    va_start(args, num_args);
     uint64_t arg[6];
     for(size_t i = 0; i < num_args; i++) {
         arg[i] = va_arg(args, uint64_t);
     }
+
     va_end(args);
 
     uint64_t stack_top = (uint64_t)(coroutine->ctx.stack) + COROUTINE_STACK_BYTESIZE;
