@@ -8,17 +8,21 @@ void worker(CCo_Channel *chan, int x) {
     }
 }
 
-void cco_main(void) {
-    CCo_Channel *chan = cco_make_chan(sizeof(int));
-    cco_run(worker, 2, chan, 3);
-    cco_run(worker, 2, chan, 10);
-    cco_run(worker, 2, chan, 27);
-    cco_run(worker, 2, chan, 43);
-    for (int i = 0; i < 40; i++) {
+void reciver(CCo_Channel *chan) {
+    for (int i = 0; i < 100000; i++) {
         int j;
         cco_recv(chan, &j);
         printf("Recived %d\n", j);
     }
+}
+
+void cco_main(void) {
+    CCo_Channel *chan = cco_make_chan(sizeof(int));
+    for (int i = 0; i < 10000; i++) {
+        cco_run(worker, 2, chan, i*10);
+    }
+
+    cco_run(reciver, 1, chan);
 }
 
 int main(void) {

@@ -107,7 +107,6 @@ CCo_Channel *cco_make_chan(size_t payload_size) {
 
 // TODO: maybe we need a delete_chan ??
 
-// Note: With multi threading all this function should be locked for the 'chan'
 void cco_send(CCo_Channel *chan, void *data) {
     pthread_mutex_lock(&chan->lock);
 

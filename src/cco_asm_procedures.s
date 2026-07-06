@@ -1,6 +1,8 @@
 .global cco_save_ctx
 .global cco_switch_ctx
 .global cco_start
+.global cco_save_stack_pointers
+.global cco_goto_init
 
 // Save the registers to the coroutine ctx.
 // First arg (rdi) contains the pointer to 'current_running->ctx'.
@@ -41,7 +43,7 @@ cco_switch_ctx:
     movq 8(%rdi), %rbp
     movq 24(%rdi), %rbx
     movq 32(%rdi), %r12
-    movq 36(%rdi), %r13
+    movq 40(%rdi), %r13
     movq 48(%rdi), %r14
     movq 56(%rdi), %r15
     jmp  *16(%rdi)
@@ -73,3 +75,18 @@ cco_start:
 
     // Jump to function code
     jmp *%rax
+
+
+// Saves rsp and rbp
+cco_save_stack_pointers:
+    movq %rsp, (%rdi)
+    movq %rbp, (%rsi)
+    ret
+
+
+// Restore rsp, rbp and jump to the init
+cco_goto_init:
+    movq %rdi, %rsp
+    movq %rsi, %rbp
+    movq $1, %rdi
+    jmp *%rdx

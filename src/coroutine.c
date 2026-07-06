@@ -11,16 +11,25 @@
 static Ctx_Node *global_queue_head = NULL;
 static pthread_mutex_t global_queue_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t global_queue_empty_cond = PTHREAD_COND_INITIALIZER;
-// static size_t global_coroutines = 0;
+static size_t global_coroutines = 0;
 static atomic_size_t total_coroutines = 0;
 
 thread_local Ctx_Node *current_running = NULL;
 static thread_local size_t local_coroutines = 0;
 
+// Saving the coroutine "real" initial stack here, because when returning
+// to 'cco_thread_init' from the last coroutine we need a stack.
+static thread_local uint64_t stack_rsp;
+static thread_local uint64_t stack_rbp;
+
+static size_t threads_num;
+
 // Asm defined functions
 void cco_save_ctx(Coroutine_Ctx *ctx);
 void cco_switch_ctx(Coroutine_Ctx *ctx);
 void cco_start(uint64_t rsp, void (*func)(void), void (*cco_clean)(void), uint64_t *arg);
+void cco_save_stack_pointers(uint64_t *stack_rsp, uint64_t *stack_rbp);
+void cco_goto_init(uint64_t stack_rsp, uint64_t stack_rbp, void *(*cco_thread_init)(void *));
 
 
 // Special function that is called by each coroutine when it ends.
@@ -35,38 +44,68 @@ static void cco_set_next_current_running(void);
 // A thread will go here if it don't have coroutines to run.
 // Here it takes some coroutines from the global queue, so
 // it can continue running.
-static void cco_thread_init(void) {
-    if (total_coroutines == 0) {
+static void *cco_thread_init(void *check_exit) {
+    bool check_exit_bool = (bool)(uintptr_t)check_exit;
+
+    if (current_running != NULL) {
+        free(current_running);
+        current_running = NULL;
+    }
+
+    if (!check_exit_bool) {
+        cco_save_stack_pointers(&stack_rsp, &stack_rbp);
+    }
+
+    if (check_exit_bool && total_coroutines == 0) {
         exit(0);
     }
 
     pthread_mutex_lock(&global_queue_lock);
 
     while (global_queue_head == NULL) {
-        pthread_cond_wait(&global_queue_empty_cond, &global_queue_lock);
+        struct timespec ts;
+        clock_gettime(CLOCK_REALTIME, &ts);
+        ts.tv_sec += 3;
+        pthread_cond_timedwait(&global_queue_empty_cond, &global_queue_lock, &ts);
     }
 
-    // TODO: take some coroutines from the global queue
+    // Get some global coroutines
+    // size_t number_to_get = 1 + global_coroutines / (threads_num - 1);
+    // TODO
+    size_t number_to_get = global_coroutines;
+
+    Ctx_Node *first = global_queue_head;
+    Ctx_Node *last = first;
+    for (size_t i = 0; i < number_to_get - 1; i++) {
+        last = last->next;
+    }
+    global_queue_head = last->next;
+    last->next = first;
+    current_running = last;
+
+    global_coroutines -= number_to_get;
+    local_coroutines += number_to_get;
 
     pthread_mutex_unlock(&global_queue_lock);
 
     // Run the next coroutine
     cco_set_next_current_running();
     cco_switch_ctx(&current_running->ctx);
+
+    // Non-reachable
+    return NULL;
 }
 
 
-void cco_init(void (*cco_main)(void), int argc, char **argv, size_t threads_num) {
-    // Setting it temporarely to 1 for avoinding exiting when starting the threads
-    total_coroutines = 1;
+void cco_init(void (*cco_main)(void), int argc, char **argv, size_t t_n) {
+    threads_num = t_n;
 
     for (size_t i = 0; i < threads_num - 1; i++) {
         pthread_t thread;
-        pthread_create(&thread, NULL, (void *(*)(void *))cco_thread_init, NULL);
+        pthread_create(&thread, NULL, cco_thread_init, (void *)false);
     }
 
-    total_coroutines = 0;
-
+    cco_save_stack_pointers(&stack_rsp, &stack_rbp);
     cco_run(cco_main, 2, argc, argv);
 }
 
@@ -92,9 +131,44 @@ void cco_run_impl(void (*func)(void), ...) {
     local_coroutines++;
     total_coroutines++;
 
-    // TODO: If local_coroutines is > some threshold then move
-    // some of the not running coroutines into the global queue
-    // in order to give some work to do to all the threads
+    // If we have more coroutines w.r.t the mean amout for each
+    // thread, we move the excess to the global queue.
+    // size_t ratio = (total_coroutines / threads_num);
+    // TODO
+    //    if (local_coroutines > ratio + 1) {
+    if (local_coroutines > 1 && threads_num > 1) {
+        // size_t number_to_take = local_coroutines - 1 - ratio;
+        size_t number_to_take = 1;
+
+        // Remove number_to_take coroutines from the local queue.
+        //
+        // Taking them as a slice of local queue:
+        // current_running -> first -> ... -> last -> ...
+        //                    |__________________|
+        //
+        Ctx_Node *first = current_running->next;
+        Ctx_Node *last = first;
+        for (size_t i = 0; i < number_to_take - 1; i++) {
+            last = last->next;
+        }
+        current_running->next = last->next;
+
+        // Adding to global queue
+        pthread_mutex_lock(&global_queue_lock);
+
+        if (global_queue_head == NULL) {
+            global_queue_head = first;
+            last->next = NULL;
+        } else {
+            last->next = global_queue_head;
+            global_queue_head = first;
+        }
+        global_coroutines += number_to_take;
+        local_coroutines -= number_to_take;
+
+        pthread_cond_broadcast(&global_queue_empty_cond);
+        pthread_mutex_unlock(&global_queue_lock);
+    }
 
     // Start the coroutine
     va_list args;
@@ -112,22 +186,45 @@ void cco_run_impl(void (*func)(void), ...) {
 
     uint64_t stack_top = (uint64_t)(coroutine->ctx.stack) + COROUTINE_STACK_BYTESIZE;
     stack_top = stack_top & -16LL; // 16-byte alignment required by ABI
-    uint64_t rsp = (uint64_t)(stack_top - 8);
 
-    cco_start(rsp, func, cco_clean, arg);
+    cco_start(stack_top, func, cco_clean, arg);
 }
 
 
 static void cco_set_next_current_running(void) {
-    Ctx_Node *next_coroutine = current_running;
-    while (true) {
-        next_coroutine = next_coroutine->next;
+
+    Ctx_Node *next_coroutine = current_running->next;
+    for (size_t i = 0; i < local_coroutines; i++) {
         if (next_coroutine->ctx.status == NOT_RUNNING) {
             current_running = next_coroutine;
             current_running->ctx.status = RUNNING;
             return;
         }
+        next_coroutine = next_coroutine->next;
     }
+
+    // All coroutines are BLOCKED, getting something from global queue
+
+    // TODO: for now pushes all on global, but would be better to
+    // take from global (it need to modify a bit the init, because
+    // that function assumene that current_running = NULL and if not it frees it)
+    pthread_mutex_lock(&global_queue_lock);
+
+    if (global_queue_head == NULL) {
+        global_queue_head = current_running->next;
+        current_running->next = NULL;
+    } else {
+        Ctx_Node *cur_next = current_running->next;
+        current_running->next = global_queue_head;
+        global_queue_head = cur_next;
+    }
+    global_coroutines += local_coroutines;
+    local_coroutines = 0;
+
+    pthread_mutex_unlock(&global_queue_lock);
+
+    current_running = NULL;
+    cco_goto_init(stack_rsp, stack_rbp, cco_thread_init);
 }
 
 
@@ -151,9 +248,9 @@ static void cco_clean(void) {
     if (current_running->next == current_running) {
         local_coroutines--;
         total_coroutines--;
-        free(current_running);
-        current_running = NULL;
-        cco_thread_init();
+
+        // Restoring the real stack, because we don't have one
+        cco_goto_init(stack_rsp, stack_rbp, cco_thread_init);
     }
 
     // Find the prev coroutine in the list
@@ -170,9 +267,9 @@ static void cco_clean(void) {
     // Free the ctx
     Ctx_Node *to_free = current_running;
     current_running = prev;
-    free(to_free);
 
     // Run the next one
     cco_set_next_current_running();
+    free(to_free);   // TODO: here with the last call we push rip on the freed stack!
     cco_switch_ctx(&current_running->ctx);
 }
