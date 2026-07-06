@@ -3,12 +3,14 @@
 
 #include "../include/cco.h"
 #include "coroutine.h"
+#include <pthread.h>
 
 typedef struct Sender_Node Sender_Node;
 struct Sender_Node {
     Sender_Node *next;
     Sender_Node *prev;
     Coroutine_Ctx *ctx;
+    void *data;
 };
 
 typedef struct Reciver_Node Reciver_Node;
@@ -25,6 +27,7 @@ struct CCo_Channel {
     Reciver_Node *recv_head;
     Reciver_Node *recv_tail;
     size_t payload_size;
+    pthread_mutex_t lock;
 };
 
 #endif

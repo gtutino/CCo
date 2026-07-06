@@ -1,4 +1,4 @@
-CFLAGS=-Wall -Wextra -std=c11 -pedantic -Werror=vla -fno-omit-frame-pointer -ggdb
+CFLAGS=-Wall -Wextra -std=c11 -pedantic -Werror=vla -fno-omit-frame-pointer -ggdb -pthread
 # -fno-omit-frame-pointer ensures that the compiler keeps the base stack pointer
 
 all: main test

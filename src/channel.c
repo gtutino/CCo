@@ -6,10 +6,11 @@
 
 // ========================= Sender queue =========================
 
-static void sender_enqueue(CCo_Channel *chan, Coroutine_Ctx *sender_ctx) {
+static void sender_enqueue(CCo_Channel *chan, Coroutine_Ctx *sender_ctx, void *data) {
     // Init the node
     Sender_Node *node = cco_malloc(sizeof(Sender_Node));
     node->ctx = sender_ctx;
+    node->data = data;
 
     // Push into the queue
     if (chan->send_head == NULL && chan->send_tail == NULL) {
@@ -100,6 +101,7 @@ CCo_Channel *cco_make_chan(size_t payload_size) {
     chan->recv_head = NULL;
     chan->recv_tail = NULL;
     chan->payload_size = payload_size;
+    pthread_mutex_init(&chan->lock, NULL);
     return chan;
 }
 
@@ -107,59 +109,46 @@ CCo_Channel *cco_make_chan(size_t payload_size) {
 
 // Note: With multi threading all this function should be locked for the 'chan'
 void cco_send(CCo_Channel *chan, void *data) {
+    pthread_mutex_lock(&chan->lock);
 
-    // If there are other senders in queue we go in queue, block coroutine and yield.
-    if (chan->send_tail != NULL) {
-        sender_enqueue(chan, &current_running->ctx);
-        current_running->ctx.status = BLOCKED;
-        cco_yield();
+    // If there is a reciver ready we send the data and return
+    if (chan->recv_tail != NULL) {
+        Reciver_Node *recv_node = reciver_dequeue(chan);
+        memcpy(recv_node->dest, data, chan->payload_size);
+        recv_node->ctx->status = NOT_RUNNING;
+        free(recv_node);
+
+        pthread_mutex_unlock(&chan->lock);
+        return;
     }
 
-    // If there is no reciver we do the same as above
-    if (chan->recv_tail == NULL) {
-        sender_enqueue(chan, &current_running->ctx);
-        current_running->ctx.status = BLOCKED;
-        cco_yield();
-    }
+    // If there is no reciver we block and enqueue
+    sender_enqueue(chan, &current_running->ctx, data);
+    current_running->ctx.status = BLOCKED;
 
-    // An unblocked coroutine will get here.
-    // If it was blocked in the first if then the second if condition is false
-    // because there is a reciver in the queue that unblocked this actual coroutine.
-    // If it was blocked in the second it resumes directly here.
-
-    // Here we can send the data
-    Reciver_Node *recv_node = reciver_dequeue(chan);
-    memcpy(recv_node->dest, data, chan->payload_size);
-    recv_node->ctx->status = NOT_RUNNING;
-    free(recv_node);
+    pthread_mutex_unlock(&chan->lock);
+    cco_yield();
 }
 
 
 void cco_recv(CCo_Channel *chan, void *dest) {
+    pthread_mutex_lock(&chan->lock);
 
-    // If there are other recivers in queue we go in queue, block coroutine and yield.
-    if (chan->recv_tail != NULL) {
-        reciver_enqueue(chan, &current_running->ctx, dest);
-        current_running->ctx.status = BLOCKED;
-        cco_yield();
-    } else {
-        // If the queue is empty we still enqueue because when whe
-        // need to recive we have to be in the queue for the sender
-        reciver_enqueue(chan, &current_running->ctx, dest);
+    // If there is a sender ready we get the data and return
+    if (chan->send_tail != NULL) {
+        Sender_Node *send_node = sender_dequeue(chan);
+        memcpy(dest, send_node->data, chan->payload_size);
+        send_node->ctx->status = NOT_RUNNING;
+        free(send_node);
+
+        pthread_mutex_unlock(&chan->lock);
+        return;
     }
 
-    // If there is no sender we do the same as above
-    if (chan->send_tail == NULL) {
-        current_running->ctx.status = BLOCKED;
-        cco_yield();
-    }
-
-    // Here we unblock and remove the sender from the queue
-    Sender_Node *send_node = sender_dequeue(chan);
-    send_node->ctx->status = NOT_RUNNING;
-    free(send_node);
-
-    // We will be unblocker after the sender will send the data
+    // If there is no sender we block and enqueue
+    reciver_enqueue(chan, &current_running->ctx, dest);
     current_running->ctx.status = BLOCKED;
+
+    pthread_mutex_unlock(&chan->lock);
     cco_yield();
 }
