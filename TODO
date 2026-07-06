@@ -1,6 +1,3 @@
-- Then I can test the message passing in a single thread way.
-- After this I can implement multithreading, giving each thread its own coroutines circular linked list (and using locks for message passing).
-
 - Check if it is possible to have variable stack coroutines.
 - Make examples of library use.
 - Talk about limitations (max 6 args, fixed stack, unbuffered message passing) in README.
