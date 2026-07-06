@@ -5,7 +5,7 @@ This is still a work in progress!
 
 ## Overview
 This library implements coroutines with unbufferend (synchronous) message-passing in C.\
-The coroutines can run in a single thread and also in multiple threads using a thread pool of fixed system thread.
+The coroutines can run in a single thread and also in multiple threads using a thread pool of fixed system threads.
 
 The API (`include/cco.h`) has functions that are simiar to the concurrent primitives of Go,\
 so if you already know Go programming language then the functions in the API will be familiar to you.
@@ -13,8 +13,15 @@ so if you already know Go programming language then the functions in the API wil
 This project was made as an assignment for the Languages for Concurrency and Distribution course of the University of Padua.\
 It is written in C (C11) and has no external dependencies.
 
+## Design
+[TODO]
+
+## Limitations
+[TODO]
+
 ## Requirements
-- C11-compatible compiler
+- x86_64 CPU and OS with System V AMD64 calling convention (I tested on a linux distro).
+- C11-compatible compiler.
 - Make (optional, you can just put all *.c and *.s files into the compiler).
 
 ## How to build
