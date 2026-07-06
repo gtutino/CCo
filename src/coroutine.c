@@ -124,7 +124,7 @@ void cco_run_impl(void (*func)(void), ...) {
     } else {
         Ctx_Node *current_running_next = current_running->next;
         current_running->next = coroutine;
-        coroutine->next = current_running_next;
+        coroutine->next = current_running_next;                // TODO: sometimes segfaults here
     }
     current_running = coroutine;
     coroutine->ctx.status = RUNNING;
@@ -208,6 +208,9 @@ set_next:
     }
 
     // All coroutines are BLOCKED, trying to get something from global queue.
+    // TODO: maybe don't take all but some fixed num of coroutines.
+    // TODO: here there is busy wait, it can be fixed if channels send a special
+    // signal after they unblock a coroutine.
     pthread_mutex_lock(&global_queue_lock);
 
     if (global_queue_head == NULL) {
@@ -277,6 +280,6 @@ static void cco_clean(void) {
 
     // Run the next one
     cco_set_next_current_running();
-    free(to_free);   // TODO: here with the last call we push rip on the freed stack!
+    // free(to_free);   // TODO: here with the last call we push rip on the freed stack!
     cco_switch_ctx(&current_running->ctx);
 }

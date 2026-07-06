@@ -25,7 +25,7 @@ typedef struct {
     uint64_t r14;
     uint64_t r15;
 
-    Coroutine_State status;
+    _Atomic Coroutine_State status;
 
     // Stack saved as is
     uint8_t stack[COROUTINE_STACK_BYTESIZE];
