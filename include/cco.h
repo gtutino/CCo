@@ -38,6 +38,12 @@ typedef struct CCo_Channel CCo_Channel;
 CCo_Channel *cco_make_chan(size_t payload_size);
 
 
+// Free the channel.
+//
+// [NOTE]: sending and reciving from a freed channel causes UB.
+void cco_free_chan(CCo_Channel *chan);
+
+
 // Send data through the channel (will be sent payload_size byte of data).
 void cco_send(CCo_Channel *chan, void *data);
 

@@ -3,6 +3,7 @@
 #include "common.h"
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 // ========================= Sender queue =========================
 
@@ -105,7 +106,13 @@ CCo_Channel *cco_make_chan(size_t payload_size) {
     return chan;
 }
 
-// TODO: maybe we need a delete_chan ??
+void cco_free_chan(CCo_Channel *chan) {
+    if (chan->send_head != NULL || chan->recv_head != NULL) {
+        fprintf(stderr, "[WARNING]: Freeing a non-empty channel!\n");
+    }
+    free(chan);
+}
+
 
 void cco_send(CCo_Channel *chan, void *data) {
     pthread_mutex_lock(&chan->lock);
