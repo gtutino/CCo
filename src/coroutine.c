@@ -193,7 +193,11 @@ void cco_run_impl(void (*func)(void), ...) {
 
 static void cco_set_next_current_running(void) {
 
-    Ctx_Node *next_coroutine = current_running->next;
+    Ctx_Node *next_coroutine;
+
+set_next:
+    // Look for the next coroutine
+    next_coroutine = current_running->next;
     for (size_t i = 0; i < local_coroutines; i++) {
         if (next_coroutine->ctx.status == NOT_RUNNING) {
             current_running = next_coroutine;
@@ -203,28 +207,31 @@ static void cco_set_next_current_running(void) {
         next_coroutine = next_coroutine->next;
     }
 
-    // All coroutines are BLOCKED, getting something from global queue
-
-    // TODO: for now pushes all on global, but would be better to
-    // take from global (it need to modify a bit the init, because
-    // that function assumene that current_running = NULL and if not it frees it)
+    // All coroutines are BLOCKED, trying to get something from global queue.
     pthread_mutex_lock(&global_queue_lock);
 
     if (global_queue_head == NULL) {
-        global_queue_head = current_running->next;
-        current_running->next = NULL;
+        pthread_mutex_unlock(&global_queue_lock);
+        goto set_next;
     } else {
-        Ctx_Node *cur_next = current_running->next;
+        // current_running -> [global queue] -> current_running_next
+        Ctx_Node *current_runnning_next = current_running->next;
         current_running->next = global_queue_head;
-        global_queue_head = cur_next;
+
+        Ctx_Node *node = global_queue_head;
+        for (size_t i = 0; i < global_coroutines - 1; i++) {
+            node = node->next;
+        }
+
+        node->next = current_runnning_next;
+        global_queue_head = NULL;
+
+        local_coroutines += global_coroutines;
+        global_coroutines = 0;
+
+        pthread_mutex_unlock(&global_queue_lock);
+        goto set_next;
     }
-    global_coroutines += local_coroutines;
-    local_coroutines = 0;
-
-    pthread_mutex_unlock(&global_queue_lock);
-
-    current_running = NULL;
-    cco_goto_init(stack_rsp, stack_rbp, cco_thread_init);
 }
 
 
