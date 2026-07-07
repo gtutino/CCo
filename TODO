@@ -1,3 +1,5 @@
+- Buffered channels.
+- Select (maybe).
 - Check if it is possible to have variable stack coroutines.
 - Make examples of library use.
-- Talk about limitations (max 6 args, fixed stack, unbuffered message passing) in README.
+- Talk about limitations (max 6 args, fixed stack) in README.
