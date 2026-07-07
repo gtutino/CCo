@@ -26,7 +26,7 @@ static size_t threads_num;
 
 // Asm defined functions
 void cco_save_ctx(Coroutine_Ctx *ctx);
-void cco_switch_ctx(Coroutine_Ctx *ctx);
+void cco_switch_ctx(Coroutine_Ctx *ctx, void *to_free);
 void cco_start(uint64_t rsp, void (*func)(void), void (*cco_clean)(void), uint64_t *arg);
 void cco_save_stack_pointers(uint64_t *stack_rsp, uint64_t *stack_rbp);
 void cco_goto_init(uint64_t stack_rsp, uint64_t stack_rbp, void (*cco_thread_init)(void));
@@ -75,7 +75,7 @@ static void cco_global_pool_thread(void) {
 
     // Run the next coroutine
     cco_set_next_current_running();
-    cco_switch_ctx(&current_running->ctx);
+    cco_switch_ctx(&current_running->ctx, NULL);
 }
 
 // Called by 'cco_clean'.
@@ -253,7 +253,7 @@ void cco_yield(void) {
     }
 
     cco_set_next_current_running();
-    cco_switch_ctx(&current_running->ctx);
+    cco_switch_ctx(&current_running->ctx, NULL);
 }
 
 
@@ -276,8 +276,7 @@ static void cco_clean(void) {
     Ctx_Node *to_free = current_running;
     current_running = prev;
 
-    // Run the next one
+    // Run the next one and free 'to_free' (done by cco_switch_ctx).
     cco_set_next_current_running();
-    // free(to_free);   // TODO: here with the last call we push rip on the freed stack!
-    cco_switch_ctx(&current_running->ctx);
+    cco_switch_ctx(&current_running->ctx, to_free);
 }

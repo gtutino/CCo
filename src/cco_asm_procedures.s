@@ -36,9 +36,18 @@ cco_save_ctx:
     ret
 
 
-// Restore the registers from courutine ctx.
+// Restore the registers from courutine ctx and frees the previous one.
 // First arg (rdi) contains the pointer to 'current_running->ctx'.
+// Second arg (rsi) contains the pointer to a coroutine to free or NULL.
 cco_switch_ctx:
+    cmpq  $0x0, %rsi
+    jne  1f
+    movq %rdi, %rdx  /* Saving 'current_running->ctx' */
+    movq %rsi, %rdi
+    call free
+    movq %rdx, %rdi  /* Restoring 'current_running->ctx' */
+
+1:
     movq 0(%rdi), %rsp
     movq 8(%rdi), %rbp
     movq 24(%rdi), %rbx
