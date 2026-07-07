@@ -138,41 +138,41 @@ void cco_run_impl(void (*func)(void), ...) {
 
     // If we have more coroutines w.r.t the mean amout for each
     // thread, we move the excess to the global queue.
-    // size_t ratio = (total_coroutines / threads_num);
-    // TODO
-    //    if (local_coroutines > ratio + 1) {
-    if (local_coroutines > 1 && threads_num > 1) {
-        // size_t number_to_take = local_coroutines - 1 - ratio;
-        size_t number_to_take = 1;
+    if (threads_num > 1) {
+        size_t ratio = (total_coroutines + threads_num - 1) / threads_num;
 
-        // Remove number_to_take coroutines from the local queue.
-        //
-        // Taking them as a slice of local queue:
-        // current_running -> first -> ... -> last -> ...
-        //                    |__________________|
-        //
-        Ctx_Node *first = current_running->next;
-        Ctx_Node *last = first;
-        for (size_t i = 0; i < number_to_take - 1; i++) {
-            last = last->next;
+        if (local_coroutines > ratio) {
+            size_t number_to_take = local_coroutines - ratio;
+
+            // Remove number_to_take coroutines from the local queue.
+            //
+            // Taking them as a slice of local queue
+            // current_running -> first -> ... -> last -> ...
+            //                    |__________________|
+            //
+            Ctx_Node *first = current_running->next;
+            Ctx_Node *last = first;
+            for (size_t i = 0; i < number_to_take - 1; i++) {
+                last = last->next;
+            }
+            current_running->next = last->next;
+
+            // Adding to global queue
+            pthread_mutex_lock(&global_queue_lock);
+
+            if (global_queue_head == NULL) {
+                global_queue_head = first;
+                last->next = NULL;
+            } else {
+                last->next = global_queue_head;
+                global_queue_head = first;
+            }
+            global_coroutines += number_to_take;
+            local_coroutines -= number_to_take;
+
+            pthread_cond_broadcast(&global_queue_empty_cond);
+            pthread_mutex_unlock(&global_queue_lock);
         }
-        current_running->next = last->next;
-
-        // Adding to global queue
-        pthread_mutex_lock(&global_queue_lock);
-
-        if (global_queue_head == NULL) {
-            global_queue_head = first;
-            last->next = NULL;
-        } else {
-            last->next = global_queue_head;
-            global_queue_head = first;
-        }
-        global_coroutines += number_to_take;
-        local_coroutines -= number_to_take;
-
-        pthread_cond_broadcast(&global_queue_empty_cond);
-        pthread_mutex_unlock(&global_queue_lock);
     }
 
     // Start the coroutine
