@@ -26,7 +26,8 @@ static size_t threads_num;
 
 // Asm defined functions
 void cco_save_ctx(Coroutine_Ctx *ctx);
-void cco_switch_ctx(Coroutine_Ctx *ctx, void *to_free);
+void cco_switch_ctx(Coroutine_Ctx *ctx);
+void cco_free_n_switch_ctx(void *to_free, Coroutine_Ctx *ctx);
 void cco_start(uint64_t rsp, void (*func)(void), void (*cco_clean)(void), uint64_t *arg);
 void cco_save_stack_pointers(uint64_t *stack_rsp, uint64_t *stack_rbp);
 void cco_goto_init(uint64_t stack_rsp, uint64_t stack_rbp, void (*cco_thread_init)(void));
@@ -75,7 +76,7 @@ static void cco_global_pool_thread(void) {
 
     // Run the next coroutine
     cco_set_next_current_running();
-    cco_switch_ctx(&current_running->ctx, NULL);
+    cco_switch_ctx(&current_running->ctx);
 }
 
 // Called by 'cco_clean'.
@@ -253,7 +254,7 @@ void cco_yield(void) {
     }
 
     cco_set_next_current_running();
-    cco_switch_ctx(&current_running->ctx, NULL);
+    cco_switch_ctx(&current_running->ctx);
 }
 
 
@@ -276,7 +277,7 @@ static void cco_clean(void) {
     Ctx_Node *to_free = current_running;
     current_running = prev;
 
-    // Run the next one and free 'to_free' (done by cco_switch_ctx).
+    // Run the next one and free 'to_free'.
     cco_set_next_current_running();
-    cco_switch_ctx(&current_running->ctx, to_free);
+    cco_free_n_switch_ctx(to_free, &current_running->ctx);
 }

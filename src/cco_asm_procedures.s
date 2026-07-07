@@ -1,5 +1,6 @@
 .global cco_save_ctx
 .global cco_switch_ctx
+.global cco_free_n_switch_ctx
 .global cco_start
 .global cco_save_stack_pointers
 .global cco_goto_init
@@ -38,16 +39,7 @@ cco_save_ctx:
 
 // Restore the registers from courutine ctx and frees the previous one.
 // First arg (rdi) contains the pointer to 'current_running->ctx'.
-// Second arg (rsi) contains the pointer to a coroutine to free or NULL.
 cco_switch_ctx:
-    cmpq  $0x0, %rsi
-    jne  1f
-    movq %rdi, %rdx  /* Saving 'current_running->ctx' */
-    movq %rsi, %rdi
-    call free
-    movq %rdx, %rdi  /* Restoring 'current_running->ctx' */
-
-1:
     movq 0(%rdi), %rsp
     movq 8(%rdi), %rbp
     movq 24(%rdi), %rbx
@@ -56,6 +48,16 @@ cco_switch_ctx:
     movq 48(%rdi), %r14
     movq 56(%rdi), %r15
     jmp  *16(%rdi)
+
+
+// Frees a coroutine and then do the context switch.
+// First arg (rdi) contains the pointer to a coroutine to free.
+// Second arg (rsi) contains the pointer to 'current_running->ctx'.
+cco_free_n_switch_ctx:
+    movq %rsi, %r12     /* Saving rsi because free can alter it */
+    call free
+    movq %r12, %rdi
+    jmp cco_switch_ctx
 
 
 // Starts the coroutine.
