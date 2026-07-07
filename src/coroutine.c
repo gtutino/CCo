@@ -8,7 +8,7 @@
 #include <pthread.h>
 #include <stdatomic.h>
 
-#define SECONDS_TO_WAIT_GLOBAL_QUEUE 3
+#define GLOBAL_QUEUE_WAIT_TIMEOUT 3
 
 static Ctx_Node *global_queue_head = NULL;
 static pthread_mutex_t global_queue_lock = PTHREAD_MUTEX_INITIALIZER;
@@ -53,7 +53,7 @@ static void cco_global_pool_thread(void) {
     while (global_queue_head == NULL) {
         struct timespec ts;
         clock_gettime(CLOCK_REALTIME, &ts);
-        ts.tv_sec += SECONDS_TO_WAIT_GLOBAL_QUEUE;
+        ts.tv_sec += GLOBAL_QUEUE_WAIT_TIMEOUT;
         pthread_cond_timedwait(&global_queue_empty_cond, &global_queue_lock, &ts);
     }
 
