@@ -29,7 +29,7 @@ void cco_save_ctx(Coroutine_Ctx *ctx);
 void cco_switch_ctx(Coroutine_Ctx *ctx);
 void cco_start(uint64_t rsp, void (*func)(void), void (*cco_clean)(void), uint64_t *arg);
 void cco_save_stack_pointers(uint64_t *stack_rsp, uint64_t *stack_rbp);
-void cco_goto_init(uint64_t stack_rsp, uint64_t stack_rbp, void *(*cco_thread_init)(void *));
+void cco_goto_init(uint64_t stack_rsp, uint64_t stack_rbp, void (*cco_thread_init)(void));
 
 
 // Special function that is called by each coroutine when it ends.
@@ -44,22 +44,7 @@ static void cco_set_next_current_running(void);
 // A thread will go here if it don't have coroutines to run.
 // Here it takes some coroutines from the global queue, so
 // it can continue running.
-static void *cco_thread_init(void *check_exit) {
-    bool check_exit_bool = (bool)(uintptr_t)check_exit;
-
-    if (current_running != NULL) {
-        free(current_running);
-        current_running = NULL;
-    }
-
-    if (!check_exit_bool) {
-        cco_save_stack_pointers(&stack_rsp, &stack_rbp);
-    }
-
-    if (check_exit_bool && total_coroutines == 0) {
-        exit(0);
-    }
-
+static void cco_global_pool_thread(void) {
     pthread_mutex_lock(&global_queue_lock);
 
     while (global_queue_head == NULL) {
@@ -91,9 +76,28 @@ static void *cco_thread_init(void *check_exit) {
     // Run the next coroutine
     cco_set_next_current_running();
     cco_switch_ctx(&current_running->ctx);
+}
 
-    // Non-reachable
-    return NULL;
+// Called by 'cco_clean'.
+// Check exit condition and frees the last coroutine.
+static void cco_clean_thread(void) {
+    // We returned from the last coroutine so we need to free it
+    if (current_running != NULL) {
+        free(current_running);
+        current_running = NULL;
+    }
+
+    if (total_coroutines == 0) {
+        exit(0);
+    }
+
+    cco_global_pool_thread();
+}
+
+
+static void cco_init_thread(void) {
+    cco_save_stack_pointers(&stack_rsp, &stack_rbp);
+    cco_global_pool_thread();
 }
 
 
@@ -102,7 +106,7 @@ void cco_init(void (*cco_main)(void), int argc, char **argv, size_t t_n) {
 
     for (size_t i = 0; i < threads_num - 1; i++) {
         pthread_t thread;
-        pthread_create(&thread, NULL, cco_thread_init, (void *)false);
+        pthread_create(&thread, NULL, (void *(*)(void *))cco_init_thread, NULL);
     }
 
     cco_save_stack_pointers(&stack_rsp, &stack_rbp);
@@ -254,27 +258,21 @@ void cco_yield(void) {
 
 
 static void cco_clean(void) {
-    // If there are no other coroutines just exit
-    if (current_running->next == current_running) {
-        local_coroutines--;
-        total_coroutines--;
+    local_coroutines--;
+    total_coroutines--;
 
-        // Restoring the real stack, because we don't have one
-        cco_goto_init(stack_rsp, stack_rbp, cco_thread_init);
+    // If there are no other coroutines just go to init function.
+    // We use 'cco_goto_init' for restoring the initial stack and go to init.
+    if (current_running->next == current_running) {
+        cco_goto_init(stack_rsp, stack_rbp, cco_clean_thread);
     }
 
-    // Find the prev coroutine in the list
+    // Remove the coroutine from the linked list
     Ctx_Node *prev = current_running->next;
     while (prev->next != current_running) {
         prev = prev->next;
     }
-
-    // Remove the coroutine from the linked list
     prev->next = current_running->next;
-    local_coroutines--;
-    total_coroutines--;
-
-    // Free the ctx
     Ctx_Node *to_free = current_running;
     current_running = prev;
 
