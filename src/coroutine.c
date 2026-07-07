@@ -56,9 +56,7 @@ static void cco_global_pool_thread(void) {
     }
 
     // Get some global coroutines
-    // size_t number_to_get = 1 + global_coroutines / (threads_num - 1);
-    // TODO
-    size_t number_to_get = global_coroutines;
+    size_t number_to_get = (global_coroutines + threads_num - 2) / (threads_num - 1);
 
     Ctx_Node *first = global_queue_head;
     Ctx_Node *last = first;
@@ -129,7 +127,7 @@ void cco_run_impl(void (*func)(void), ...) {
     } else {
         Ctx_Node *current_running_next = current_running->next;
         current_running->next = coroutine;
-        coroutine->next = current_running_next;                // TODO: sometimes segfaults here
+        coroutine->next = current_running_next;
     }
     current_running = coroutine;
     coroutine->ctx.status = RUNNING;
@@ -143,6 +141,14 @@ void cco_run_impl(void (*func)(void), ...) {
 
         if (local_coroutines > ratio) {
             size_t number_to_take = local_coroutines - ratio;
+
+            // We need to save at least 2 coroutines locally.
+            // This is very important, in that case we save the old current_running
+            // that is the current stack (giving that causes UB) and the current_running.
+            size_t max_takeable = local_coroutines - 2;
+            if (number_to_take > max_takeable) {
+                number_to_take = max_takeable;
+            }
 
             // Remove number_to_take coroutines from the local queue.
             //
