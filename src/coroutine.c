@@ -150,34 +150,36 @@ void cco_run_impl(void (*func)(void), ...) {
                 number_to_take = max_takeable;
             }
 
-            // Remove number_to_take coroutines from the local queue.
-            //
-            // Taking them as a slice of local queue
-            // current_running -> first -> ... -> last -> ...
-            //                    |__________________|
-            //
-            Ctx_Node *first = current_running->next;
-            Ctx_Node *last = first;
-            for (size_t i = 0; i < number_to_take - 1; i++) {
-                last = last->next;
+            if (number_to_take > 0) {
+                // Remove number_to_take coroutines from the local queue.
+                //
+                // Taking them as a slice of local queue
+                // current_running -> first -> ... -> last -> ...
+                //                    |__________________|
+                //
+                Ctx_Node *first = current_running->next;
+                Ctx_Node *last = first;
+                for (size_t i = 0; i < number_to_take - 1; i++) {
+                    last = last->next;
+                }
+                current_running->next = last->next;
+
+                // Adding to global queue
+                pthread_mutex_lock(&global_queue_lock);
+
+                if (global_queue_head == NULL) {
+                    global_queue_head = first;
+                    last->next = NULL;
+                } else {
+                    last->next = global_queue_head;
+                    global_queue_head = first;
+                }
+                global_coroutines += number_to_take;
+                local_coroutines -= number_to_take;
+
+                pthread_cond_broadcast(&global_queue_empty_cond);
+                pthread_mutex_unlock(&global_queue_lock);
             }
-            current_running->next = last->next;
-
-            // Adding to global queue
-            pthread_mutex_lock(&global_queue_lock);
-
-            if (global_queue_head == NULL) {
-                global_queue_head = first;
-                last->next = NULL;
-            } else {
-                last->next = global_queue_head;
-                global_queue_head = first;
-            }
-            global_coroutines += number_to_take;
-            local_coroutines -= number_to_take;
-
-            pthread_cond_broadcast(&global_queue_empty_cond);
-            pthread_mutex_unlock(&global_queue_lock);
         }
     }
 
