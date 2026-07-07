@@ -8,6 +8,8 @@
 #include <pthread.h>
 #include <stdatomic.h>
 
+#define SECONDS_TO_WAIT_GLOBAL_QUEUE 3
+
 static Ctx_Node *global_queue_head = NULL;
 static pthread_mutex_t global_queue_lock = PTHREAD_MUTEX_INITIALIZER;
 static pthread_cond_t global_queue_empty_cond = PTHREAD_COND_INITIALIZER;
@@ -51,7 +53,7 @@ static void cco_global_pool_thread(void) {
     while (global_queue_head == NULL) {
         struct timespec ts;
         clock_gettime(CLOCK_REALTIME, &ts);
-        ts.tv_sec += 3;
+        ts.tv_sec += SECONDS_TO_WAIT_GLOBAL_QUEUE;
         pthread_cond_timedwait(&global_queue_empty_cond, &global_queue_lock, &ts);
     }
 
@@ -221,7 +223,6 @@ set_next:
     }
 
     // All coroutines are BLOCKED, trying to get something from global queue.
-    // TODO: maybe don't take all but some fixed num of coroutines.
     // TODO: here there is busy wait, it can be fixed if channels send a special
     // signal after they unblock a coroutine.
     pthread_mutex_lock(&global_queue_lock);
@@ -230,20 +231,21 @@ set_next:
         pthread_mutex_unlock(&global_queue_lock);
         goto set_next;
     } else {
-        // current_running -> [global queue] -> current_running_next
+        // Get some global coroutines
+        size_t number_to_get = (global_coroutines + threads_num - 2) / (threads_num - 1);
         Ctx_Node *current_runnning_next = current_running->next;
         current_running->next = global_queue_head;
 
-        Ctx_Node *node = global_queue_head;
-        for (size_t i = 0; i < global_coroutines - 1; i++) {
-            node = node->next;
+        Ctx_Node *first = global_queue_head;
+        Ctx_Node *last = first;
+        for (size_t i = 0; i < number_to_get - 1; i++) {
+            last = last->next;
         }
+        global_queue_head = last->next;
+        last->next = current_runnning_next;
 
-        node->next = current_runnning_next;
-        global_queue_head = NULL;
-
-        local_coroutines += global_coroutines;
-        global_coroutines = 0;
+        global_coroutines -= number_to_get;
+        local_coroutines += number_to_get;
 
         pthread_mutex_unlock(&global_queue_lock);
         goto set_next;
@@ -286,6 +288,9 @@ static void cco_clean(void) {
     current_running = prev;
 
     // Run the next one and free 'to_free'.
+    // We don't free it here because we are on its stack
+    // and that will cause an UB, because the call after the
+    // free will write the rip to the stack).
     cco_set_next_current_running();
     cco_free_n_switch_ctx(to_free, &current_running->ctx);
 }
