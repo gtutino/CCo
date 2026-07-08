@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
+
+#define CCO_THREAD_NUM 4
 #include "include/cco.h"
 
 void worker(CCo_Channel *chan, int x) {
@@ -18,7 +20,9 @@ void reciver(CCo_Channel *data_chan, CCo_Channel *done_chan) {
     cco_send(done_chan, &done);
 }
 
-void cco_main(void) {
+void cco_main(int argc, char **argv) {
+    (void) argc;
+    (void) argv;
     CCo_Channel *data_chan = cco_make_chan(sizeof(int));
     CCo_Channel *done_chan = cco_make_chan(sizeof(char));
 
@@ -31,8 +35,4 @@ void cco_main(void) {
     cco_recv(done_chan, &done);
     cco_free_chan(data_chan);
     cco_free_chan(done_chan);
-}
-
-int main(void) {
-    cco_init(cco_main, 0, NULL, 4);
 }

@@ -1,22 +1,21 @@
+// Stackful Coroutine implementation in C.
+// This is the public interface of the library.
+
 #ifndef CCO_LIB_H
 #define CCO_LIB_H
 
 #include <stddef.h>
 
-// Stackful Coroutine implementation in C.
-// This is the public interface of the library.
+// By default it's single threaded.
+#ifndef CCO_THREAD_NUM
+#define CCO_THREAD_NUM 1
+#endif
 
 
-// Starts the main coroutine and inits the runtime.
-// The standard main function MUST be used to call this function.
-//
-// In this way:
-//  int main(int argc, char **argv) {
-//      cco_init(cco_main, argc, argv, 4);
-//  }
-//
-// 'threads_num' is the num of threads that will be in the thread pool.
-void cco_init(void (*cco_main)(void), int argc, char **argv, size_t threads_num);
+// This function is NOT defined in the library.
+// This MUST be defined by the user and it is
+// the new entry point.
+void cco_main(int argc, char **argv);
 
 
 // Creates a new coroutine.

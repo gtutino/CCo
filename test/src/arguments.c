@@ -8,11 +8,9 @@ void worker(int id, int max_count) {
     }
 }
 
-void cco_main(void) {
+void cco_main(int argc, char **argv) {
+    (void) argc;
+    (void) argv;
     cco_run(worker, 2, 1, 3);
     cco_run(worker, 2, 2, 2);
-}
-
-int main(void) {
-    cco_init(cco_main, 0, NULL, 1);
 }

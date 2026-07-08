@@ -101,9 +101,12 @@ static void cco_init_thread(void) {
     cco_global_pool_thread();
 }
 
-
-void cco_init(void (*cco_main)(void), int argc, char **argv, size_t t_n) {
-    threads_num = t_n;
+static void cco_init(void (*cco_main)(int argc, char **argv), int argc, char **argv) {
+    if (CCO_THREAD_NUM < 1) {
+        fprintf(stderr, "[ERROR]: CCO_THREAD_NUM must be > 0!\n");
+        exit(1);
+    }
+    threads_num = CCO_THREAD_NUM;
 
     for (size_t i = 0; i < threads_num - 1; i++) {
         pthread_t thread;
@@ -114,6 +117,9 @@ void cco_init(void (*cco_main)(void), int argc, char **argv, size_t t_n) {
     cco_run(cco_main, 2, argc, argv);
 }
 
+int main(int argc, char **argv) {
+    cco_init(cco_main, argc, argv);
+}
 
 void cco_run_impl(void (*func)(void), ...) {
     // Save current coroutine context

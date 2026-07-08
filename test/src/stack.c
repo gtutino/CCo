@@ -19,11 +19,9 @@ void standard_coro(int id) {
     printf("Standard Coro %d - Step 2\n", id);
 }
 
-void cco_main(void) {
+void cco_main(int argc, char **argv) {
+    (void) argc;
+    (void) argv;
     cco_run(deep_func_level_1, 1, 101);
     cco_run(standard_coro, 1, 202);
-}
-
-int main(void) {
-    cco_init(cco_main, 0, NULL, 1);
 }
