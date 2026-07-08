@@ -7,6 +7,7 @@
 #include <stdbool.h>
 #include <pthread.h>
 #include <stdatomic.h>
+#include <unistd.h>
 
 #define GLOBAL_QUEUE_WAIT_TIMEOUT 3
 
@@ -102,11 +103,23 @@ static void cco_init_thread(void) {
 }
 
 static void cco_init(void (*cco_main)(int argc, char **argv), int argc, char **argv) {
+
+    // Thread number set by default to cores number
+#ifndef CCO_THREAD_NUM
+    long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+    if (num_cores < 1) {
+        fprintf(stderr, "[WARNING]: Failed to detect cores number, running in single thread.\n");
+        threads_num = 1;
+    } else {
+        threads_num = num_cores;
+    }
+#else
     if (CCO_THREAD_NUM < 1) {
         fprintf(stderr, "[ERROR]: CCO_THREAD_NUM must be > 0!\n");
         exit(1);
     }
     threads_num = CCO_THREAD_NUM;
+#endif
 
     for (size_t i = 0; i < threads_num - 1; i++) {
         pthread_t thread;

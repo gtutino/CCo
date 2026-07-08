@@ -1,15 +1,14 @@
 // Stackful Coroutine implementation in C.
 // This is the public interface of the library.
+//
+// [NOTE]: by default the thread pool will have thread number = number of cores.
+// If you want to set a specific number of threads just define CCO_THREAD_NUM
+// in the building script by passing -DCCO_THREAD_NUM=$(NUM) option to your compiler.
 
 #ifndef CCO_LIB_H
 #define CCO_LIB_H
 
 #include <stddef.h>
-
-// By default it's single threaded.
-#ifndef CCO_THREAD_NUM
-#define CCO_THREAD_NUM 1
-#endif
 
 
 // This function is NOT defined in the library.

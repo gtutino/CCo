@@ -1,7 +1,5 @@
 #include <stdio.h>
 #include <stdlib.h>
-
-#define CCO_THREAD_NUM 4
 #include "include/cco.h"
 
 void worker(CCo_Channel *chan, int x) {
