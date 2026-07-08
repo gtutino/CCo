@@ -102,7 +102,8 @@ static void cco_init_thread(void) {
     cco_global_pool_thread();
 }
 
-static void cco_init(void (*cco_main)(int argc, char **argv), int argc, char **argv) {
+
+int main(int argc, char **argv) {
 
     // Thread number set by default to cores number
 #ifndef CCO_THREAD_NUM
@@ -130,9 +131,6 @@ static void cco_init(void (*cco_main)(int argc, char **argv), int argc, char **a
     cco_run(cco_main, 2, argc, argv);
 }
 
-int main(int argc, char **argv) {
-    cco_init(cco_main, argc, argv);
-}
 
 void cco_run_impl(void (*func)(void), ...) {
     // Save current coroutine context
