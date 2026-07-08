@@ -25,9 +25,9 @@ void cco_main(int argc, char **argv) {
     CCo_Channel *done_chan = cco_make_chan(sizeof(char));
 
     for (int i = 0; i < 1000; i++) {
-        cco_run(worker, 2, data_chan, i*10);
+        cco_run(worker, data_chan, i*10);
     }
-    cco_run(reciver, 2, data_chan, done_chan);
+    cco_run(reciver, data_chan, done_chan);
 
     char done;
     cco_recv(done_chan, &done);

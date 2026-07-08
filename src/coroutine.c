@@ -206,12 +206,13 @@ void cco_run_impl(void (*func)(void), ...) {
     va_list args;
     va_start(args, func);
 
-    size_t num_args = va_arg(args, size_t);
-    assert(num_args <= 6 && "The coroutines supports max 6 args for now!\n");
-
     uint64_t arg[6];
-    for(size_t i = 0; i < num_args; i++) {
+    arg[0] = va_arg(args, uint64_t);
+
+    size_t i = 1;
+    while (((void *)arg[i-1]) != &CCO_ARGS_END_SENTINEL && i < 6) {
         arg[i] = va_arg(args, uint64_t);
+        i++;
     }
 
     va_end(args);

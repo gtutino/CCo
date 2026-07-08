@@ -15,6 +15,6 @@ void long_lived(void) {
 void cco_main(int argc, char **argv) {
     (void) argc;
     (void) argv;
-    cco_run(short_lived, 0);
-    cco_run(long_lived, 0);
+    cco_run(short_lived);
+    cco_run(long_lived);
 }

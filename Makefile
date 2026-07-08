@@ -20,7 +20,7 @@ TEST_BIN := $(TEST_SRC:.c=)
 
 test: $(TEST_BIN)
 test/%: test/%.c
-	@$(CC) $(CFLAGS) -DCCO_THREAD_NUM=1 src/coroutine.c src/common.c src/channel.c src/cco_asm_procedures.s $< -o $@
+	@$(CC) $(CFLAGS) -Wno-pedantic -DCCO_THREAD_NUM=1 src/coroutine.c src/common.c src/channel.c src/cco_asm_procedures.s $< -o $@
 	@bash test/run_tests.sh $(notdir $@)
 
 

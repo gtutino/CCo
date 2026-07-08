@@ -22,6 +22,6 @@ void standard_coro(int id) {
 void cco_main(int argc, char **argv) {
     (void) argc;
     (void) argv;
-    cco_run(deep_func_level_1, 1, 101);
-    cco_run(standard_coro, 1, 202);
+    cco_run(deep_func_level_1, 101);
+    cco_run(standard_coro, 202);
 }

@@ -23,7 +23,8 @@ void cco_main(int argc, char **argv);
 // [NOTE]: The variadic args takes the args for 'func' (max 6 allowed).
 // The first variadic arg must be the number of args.
 void cco_run_impl(void (*func)(void), ...);
-#define cco_run(func, ...) cco_run_impl((void(*)(void))func, __VA_ARGS__);
+#define cco_run(func, ...) cco_run_impl((void(*)(void))func, ##__VA_ARGS__, &CCO_ARGS_END_SENTINEL)
+static const char CCO_ARGS_END_SENTINEL;
 
 
 // Channels can be used for communication between the coroutines.
