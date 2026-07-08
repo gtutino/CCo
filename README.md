@@ -20,7 +20,7 @@ It is written in C (C11) and has no external dependencies.
 [TODO]
 
 ## Requirements
-- x86_64 CPU and OS with System V AMD64 calling convention (I tested on a linux distro).
+- x86_64 architecture and OS with System V AMD64 calling convention (I tested on a linux distro).
 - C11-compatible compiler.
 - Make (optional, you can just put all *.c and *.s files into the compiler).
 
