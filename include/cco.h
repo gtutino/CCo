@@ -1,12 +1,13 @@
 // Stackful Coroutine implementation in C.
 // This is the public interface of the library.
 //
-// [NOTE]: by default the thread pool will have thread number = number of cores.
+// [NOTE]:
+// By default the thread pool will have thread number = number of cores.
 // If you want to set a specific number of threads just define CCO_THREAD_NUM
 // in the building script by passing -DCCO_THREAD_NUM=$(NUM) option to your compiler.
 
-#ifndef CCO_LIB_H
-#define CCO_LIB_H
+#ifndef CCO_H_
+#define CCO_H_
 
 #include <stddef.h>
 
@@ -20,8 +21,9 @@ void cco_main(int argc, char **argv);
 // Creates a new coroutine.
 // This must be called by another coroutine.
 //
-// [NOTE]: The variadic args takes the args for 'func' (max 6 allowed).
-// The first variadic arg must be the number of args.
+// [NOTE]:
+// The variadic args takes the args for 'func' (max 6 allowed).
+// ALL the variadic args MUST HAVE size <= 8 byte, so you should pass large structs only by pointer.
 void cco_run_impl(void (*func)(void), ...);
 #define cco_run(func, ...) cco_run_impl((void(*)(void))func, ##__VA_ARGS__, &CCO_ARGS_END_SENTINEL)
 static const char CCO_ARGS_END_SENTINEL;
