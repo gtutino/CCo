@@ -3,8 +3,7 @@
 //
 // [NOTE]:
 // By default the thread pool will have thread number = number of cores.
-// If you want to set a specific number of threads just define CCO_THREAD_NUM
-// in the building script by passing -DCCO_THREAD_NUM=$(NUM) option to your compiler.
+// If you want to set a specific number of threads just define CCO_THREADS env variable.
 
 #ifndef CCO_H_
 #define CCO_H_

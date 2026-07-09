@@ -1,4 +1,4 @@
-output=$("./test/src/$1")
+output=$(CCO_THREADS=1 "./test/src/$1")
 expected_output=$(cat "test/output/$1.txt")
 
 if [[ "$output" == "$expected_output" ]]; then

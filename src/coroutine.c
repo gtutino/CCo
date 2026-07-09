@@ -103,23 +103,28 @@ static void cco_init_thread(void) {
 
 
 int main(int argc, char **argv) {
+    threads_num = 0;
+    char *env_threads = getenv("CCO_THREADS");
 
-    // Thread number set by default to cores number
-#ifndef CCO_THREAD_NUM
-    long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
-    if (num_cores < 1) {
-        fprintf(stderr, "[WARNING]: Failed to detect cores number, running in single thread.\n");
-        threads_num = 1;
-    } else {
-        threads_num = num_cores;
+    if (env_threads != NULL) {
+        int threads = atoi(env_threads);
+        if (threads <= 0) {
+            fprintf(stderr, "[ERROR]: CCO_THREADS must be > 0\n");
+            exit(1);
+        }
+        threads_num = threads;
     }
-#else
-    if (CCO_THREAD_NUM < 1) {
-        fprintf(stderr, "[ERROR]: CCO_THREAD_NUM must be > 0!\n");
-        exit(1);
+
+    // Thread number set to cores number if CCO_THREADS env is not set
+    if (threads_num == 0) {
+        long num_cores = sysconf(_SC_NPROCESSORS_ONLN);
+        if (num_cores < 1) {
+            fprintf(stderr, "[WARNING]: Failed to detect cores number, running in single thread.\n");
+            threads_num = 1;
+        } else {
+            threads_num = num_cores;
+        }
     }
-    threads_num = CCO_THREAD_NUM;
-#endif
 
     for (size_t i = 0; i < threads_num - 1; i++) {
         pthread_t thread;
