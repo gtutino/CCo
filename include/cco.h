@@ -19,7 +19,6 @@ void cco_main(int argc, char **argv);
 
 
 // Creates a new coroutine.
-// This must be called by another coroutine.
 //
 // [NOTE]:
 // The variadic args takes the args for 'func' (max 6 allowed).
@@ -33,16 +32,18 @@ static const char CCO_ARGS_END_SENTINEL;
 
 
 // Channels can be used for communication between the coroutines.
-// The communication is synchronous and unbuffered,
-// so send and recv are blocking (and can cause context switch).
 typedef struct CCo_Channel CCo_Channel;
 
 
 // Create a new channel.
+// The communication in this channel is unbuffered and synchronous,
+// so send and recv can be blocking (so can cause context switch).
 CCo_Channel *cco_make_chan(size_t payload_size);
 
 
 // Create a new buffered channel.
+// The communication in this channel is buffered and asynchronous.
+// But if the buffer is full send and recv can be blocking.
 // CCo_Channel *cco_make_bufchan(size_t payload_size, size_t buffer_count);
 
 
