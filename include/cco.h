@@ -24,6 +24,9 @@ void cco_main(int argc, char **argv);
 // [NOTE]:
 // The variadic args takes the args for 'func' (max 6 allowed).
 // ALL the variadic args MUST HAVE size <= 8 byte, so you should pass large structs only by pointer.
+//
+// Also, passing a pointer that points into the previous coroutine stack can be dangerous.
+// If the previous coroutine ends before the current one you'll have use after free.
 void cco_run_impl(void (*func)(void), ...);
 #define cco_run(func, ...) cco_run_impl((void(*)(void))func, ##__VA_ARGS__, &CCO_ARGS_END_SENTINEL)
 static const char CCO_ARGS_END_SENTINEL;
@@ -68,7 +71,7 @@ void cco_recv(CCo_Channel *chan, void *dest);
 //     ..
 //  );
 // size_t cco_select_impl(char arg_start, ...);
-// #define cco_select(arg_start, ...) cco_run_impl(arg_start, ##__VA_ARGS__, NULL)
+// #define cco_select(arg_start, ...) cco_run_impl(arg_start, __VA_ARGS__, NULL)
 
 
 // Context switch to the next coroutine.
