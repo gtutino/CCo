@@ -29,9 +29,9 @@ static size_t threads_num;
 // Asm defined functions
 void cco_save_ctx(Coroutine_Ctx *ctx);
 void cco_switch_ctx(Coroutine_Ctx *ctx);
-void cco_free_n_switch_ctx(void *to_free, Coroutine_Ctx *ctx);
 void cco_start(uint64_t rsp, void (*func)(void), void (*cco_clean)(void), uint64_t *arg);
 void cco_save_stack_pointers(uint64_t *stack_rsp, uint64_t *stack_rbp);
+void cco_free_n_switch_ctx(void *to_free, Coroutine_Ctx *ctx, uint64_t stack_rsp, uint64_t stack_rbp);
 void cco_goto_init(uint64_t stack_rsp, uint64_t stack_rbp, void (*cco_thread_init)(void));
 
 
@@ -205,11 +205,11 @@ void cco_run_impl(void (*func)(void), ...) {
     va_list args;
     va_start(args, func);
 
-    uint64_t arg[6];
+    uint64_t arg[7];
     arg[0] = va_arg(args, uint64_t);
 
     size_t i = 1;
-    while (((void *)arg[i-1]) != &CCO_ARGS_END_SENTINEL && i < 6) {
+    while (((void *)arg[i-1]) != &CCO_ARGS_END_SENTINEL && i < 7) {
         arg[i] = va_arg(args, uint64_t);
         i++;
     }
@@ -309,5 +309,5 @@ static void cco_clean(void) {
     // and that will cause an UB, because the call after the
     // free will write the rip to the stack).
     cco_set_next_current_running();
-    cco_free_n_switch_ctx(to_free, &current_running->ctx);
+    cco_free_n_switch_ctx(to_free, &current_running->ctx, stack_rsp, stack_rbp);
 }

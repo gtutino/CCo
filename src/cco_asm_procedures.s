@@ -53,7 +53,13 @@ cco_switch_ctx:
 // Frees a coroutine and then do the context switch.
 // First arg (rdi) contains the pointer to a coroutine to free.
 // Second arg (rsi) contains the pointer to 'current_running->ctx'.
+// Third arg (rdx) contains stack_rsp.
+// Fourth arg (rcx) contains stack_rbp.
 cco_free_n_switch_ctx:
+    // Restoring initial stack
+    movq %rdx, %rsp
+    movq %rcx, %rbp
+
     movq %rsi, %r12     /* Saving rsi because free can alter it */
     call free
     movq %r12, %rdi
@@ -99,5 +105,4 @@ cco_save_stack_pointers:
 cco_goto_init:
     movq %rdi, %rsp
     movq %rsi, %rbp
-    movq $1, %rdi
     jmp *%rdx
