@@ -37,6 +37,10 @@ typedef struct CCo_Channel CCo_Channel;
 CCo_Channel *cco_make_chan(size_t payload_size);
 
 
+// Create a new buffered channel.
+// CCo_Channel *cco_make_bufchan(size_t payload_size, size_t buffer_count);
+
+
 // Free the channel.
 //
 // [NOTE]: sending and reciving from a freed channel causes UB.
@@ -49,6 +53,20 @@ void cco_send(CCo_Channel *chan, void *data);
 
 // Recive data through the channel.
 void cco_recv(CCo_Channel *chan, void *dest);
+
+
+// Select [TODO: better description].
+//
+// Example:
+// cco_select(
+//     cco_send, chan, &data1,
+//     cco_recv, chan, &dest1,
+//     cco_send, chan, &data2,
+//     ...
+//     ..
+//  );
+// size_t cco_select_impl(char arg_start, ...);
+// #define cco_select(arg_start, ...) cco_run_impl(arg_start, ##__VA_ARGS__, NULL)
 
 
 // Context switch to the next coroutine.
