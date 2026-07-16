@@ -34,16 +34,13 @@ static const char CCO_ARGS_END_SENTINEL;
 typedef struct CCo_Channel CCo_Channel;
 
 
-// Create a new channel.
-// The communication in this channel is unbuffered and synchronous,
-// so send and recv can be blocking (so can cause context switch).
-CCo_Channel *cco_make_chan(size_t payload_size);
-
-
-// Create a new buffered channel.
-// The communication in this channel is buffered and asynchronous.
-// But if the buffer is full send and recv can be blocking.
-// CCo_Channel *cco_make_bufchan(size_t payload_size, size_t buffer_count);
+// Creates a new channel.
+//
+// [NOTE]:
+// 'buffer_capacity' is the max number of messages that can be hold in the buffer.
+// If 'buffer_capacity' = 0 then the channel will be unbuffered.
+// If there isn't a buffer or the buffer is full send and recv can be blocking.
+CCo_Channel *cco_make_chan(size_t payload_size, size_t buffer_capacity);
 
 
 // Free the channel.

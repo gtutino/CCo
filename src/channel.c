@@ -1,9 +1,46 @@
 #include "../include/cco.h"
-#include "channel.h"
+#include "coroutine.h"
 #include "common.h"
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <pthread.h>
+
+// TODO: here can be used just a 'Node' struct
+typedef struct Sender_Node Sender_Node;
+struct Sender_Node {
+    Sender_Node *next;
+    Sender_Node *prev;
+    Coroutine_Ctx *ctx;
+    void *data;
+};
+
+typedef struct Reciver_Node Reciver_Node;
+struct Reciver_Node {
+    Reciver_Node *next;
+    Reciver_Node *prev;
+    Coroutine_Ctx *ctx;
+    void *dest;
+};
+
+typedef struct {
+    void *data;
+    size_t count;
+    size_t capacity;
+    size_t head;
+    size_t tail;
+} Buffer;
+
+struct CCo_Channel {
+    Sender_Node *send_head;
+    Sender_Node *send_tail;
+    Reciver_Node *recv_head;
+    Reciver_Node *recv_tail;
+    size_t payload_size;
+    pthread_mutex_t lock;
+    Buffer buf;
+};
+
 
 // ========================= Sender queue =========================
 
@@ -95,7 +132,41 @@ static Reciver_Node *reciver_dequeue(CCo_Channel *chan) {
 // ===================== // Reciver queue // ======================
 
 
-CCo_Channel *cco_make_chan(size_t payload_size) {
+// =========================== Buffer =============================
+
+static int buf_enqueue(CCo_Channel *chan, void *data) {
+
+    // Buffer full
+    if (chan->buf.count == chan->buf.capacity) {
+        return 1;
+    }
+
+    memcpy(
+        ((uint8_t*)chan->buf.data) + (chan->buf.tail*chan->payload_size),
+        data,
+        chan->payload_size
+    );
+
+    chan->buf.count++;
+    chan->buf.tail = (chan->buf.tail + 1) % chan->buf.capacity;
+    return 0;
+}
+
+static void *buf_dequeue(CCo_Channel *chan) {
+    if (chan->buf.count == 0) {
+        return NULL;
+    }
+
+    void *data = ((uint8_t*)chan->buf.data) + (chan->buf.head*chan->payload_size);
+    chan->buf.count--;
+    chan->buf.head = (chan->buf.head + 1) % chan->buf.capacity;
+    return data;
+}
+
+// ======================== // Buffer // ==========================
+
+
+CCo_Channel *cco_make_chan(size_t payload_size, size_t buffer_capacity) {
     CCo_Channel *chan = cco_malloc(sizeof(CCo_Channel));
     chan->send_head = NULL;
     chan->send_tail = NULL;
@@ -103,12 +174,27 @@ CCo_Channel *cco_make_chan(size_t payload_size) {
     chan->recv_tail = NULL;
     chan->payload_size = payload_size;
     pthread_mutex_init(&chan->lock, NULL);
+
+    if (buffer_capacity > 0) {
+        chan->buf.data = cco_malloc(payload_size*buffer_capacity);
+        chan->buf.count = 0;
+        chan->buf.capacity = buffer_capacity;
+        chan->buf.head = 0;
+        chan->buf.tail = 0;
+    }
+    else {
+        chan->buf.data = NULL;
+    }
+
     return chan;
 }
 
 void cco_free_chan(CCo_Channel *chan) {
     if (chan->send_head != NULL || chan->recv_head != NULL) {
         fprintf(stderr, "[WARNING]: Freeing a non-empty channel!\n");
+    }
+    if (chan->buf.data != NULL) {
+        free(chan->buf.data);
     }
     free(chan);
 }
