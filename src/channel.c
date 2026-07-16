@@ -6,21 +6,12 @@
 #include <stdio.h>
 #include <pthread.h>
 
-// TODO: here can be used just a 'Node' struct
-typedef struct Sender_Node Sender_Node;
-struct Sender_Node {
-    Sender_Node *next;
-    Sender_Node *prev;
+typedef struct Node Node;
+struct Node {
+    Node *next;
+    Node *prev;
     Coroutine_Ctx *ctx;
     void *data;
-};
-
-typedef struct Reciver_Node Reciver_Node;
-struct Reciver_Node {
-    Reciver_Node *next;
-    Reciver_Node *prev;
-    Coroutine_Ctx *ctx;
-    void *dest;
 };
 
 typedef struct {
@@ -32,104 +23,80 @@ typedef struct {
 } Buffer;
 
 struct CCo_Channel {
-    Sender_Node *send_head;
-    Sender_Node *send_tail;
-    Reciver_Node *recv_head;
-    Reciver_Node *recv_tail;
+    Node *send_head;
+    Node *send_tail;
+    Node *recv_head;
+    Node *recv_tail;
     size_t payload_size;
     pthread_mutex_t lock;
     Buffer buf;
 };
 
 
-// ========================= Sender queue =========================
+// =========================== Queue =============================
 
-static void sender_enqueue(CCo_Channel *chan, Coroutine_Ctx *sender_ctx, void *data) {
+static void node_enqueue(Node **head, Node **tail, Coroutine_Ctx *ctx, void *data) {
     // Init the node
-    Sender_Node *node = cco_malloc(sizeof(Sender_Node));
-    node->ctx = sender_ctx;
+    Node *node = cco_malloc(sizeof(Node));
+    node->ctx = ctx;
     node->data = data;
 
     // Push into the queue
-    if (chan->send_head == NULL && chan->send_tail == NULL) {
+    if (*head == NULL && *tail == NULL) {
         node->next = NULL;
         node->prev = NULL;
-        chan->send_head = node;
-        chan->send_tail = node;
+        *head = node;
+        *tail = node;
     } else {
-        node->next = chan->send_head;
+        node->next = *head;
         node->prev = NULL;
-        chan->send_head->prev = node;
-        chan->send_head = node;
+        (*head)->prev = node;
+        *head = node;
     }
 }
 
 // Returns NULL if the queue is empty
-static Sender_Node *sender_dequeue(CCo_Channel *chan) {
-    if (chan->send_head == NULL) {
+static Node *node_dequeue(Node **head, Node **tail) {
+    if (*head == NULL) {
         return NULL;
     }
-    else if (chan->send_head == chan->send_tail) {
-        Sender_Node *to_return = chan->send_head;
-        chan->send_head = NULL;
-        chan->send_tail = NULL;
+    else if (*head == *tail) {
+        Node *to_return = *head;
+        *head = NULL;
+        *tail = NULL;
         return to_return;
     }
     else {
-        Sender_Node *to_return = chan->send_tail;
-        Sender_Node *new_tail = chan->send_tail->prev;
-        chan->send_tail = new_tail;
+        Node *to_return = *tail;
+        Node *new_tail = (*tail)->prev;
+        *tail = new_tail;
         new_tail->next = NULL;
         return to_return;
     }
 }
 
-// ====================== // Sender queue // ======================
+// ======================== // Queue // ==========================
 
 
-// ======================== Reciver queue =========================
+// ====================== Send - Recv queues ======================
 
-static void reciver_enqueue(CCo_Channel *chan, Coroutine_Ctx *reciver_ctx, void *dest) {
-    // Init the node
-    Reciver_Node *node = cco_malloc(sizeof(Reciver_Node));
-    node->ctx = reciver_ctx;
-    node->dest = dest;
-
-    // Push into the queue
-    if (chan->recv_head == NULL && chan->recv_tail == NULL) {
-        node->next = NULL;
-        node->prev = NULL;
-        chan->recv_head = node;
-        chan->recv_tail = node;
-    } else {
-        node->next = chan->recv_head;
-        node->prev = NULL;
-        chan->recv_head->prev = node;
-        chan->recv_head = node;
-    }
+static inline void sender_enqueue(CCo_Channel *chan, Coroutine_Ctx *sender_ctx, void *data) {
+    node_enqueue(&chan->send_head, &chan->send_tail, sender_ctx, data);
 }
 
-// Returns NULL if the queue is empty
-static Reciver_Node *reciver_dequeue(CCo_Channel *chan) {
-    if (chan->recv_head == NULL) {
-        return NULL;
-    }
-    else if (chan->recv_head == chan->recv_tail) {
-        Reciver_Node *to_return = chan->recv_head;
-        chan->recv_head = NULL;
-        chan->recv_tail = NULL;
-        return to_return;
-    }
-    else {
-        Reciver_Node *to_return = chan->recv_tail;
-        Reciver_Node *new_tail = chan->recv_tail->prev;
-        chan->recv_tail = new_tail;
-        new_tail->next = NULL;
-        return to_return;
-    }
+static inline Node *sender_dequeue(CCo_Channel *chan) {
+    return node_dequeue(&chan->send_head, &chan->send_tail);
 }
 
-// ===================== // Reciver queue // ======================
+static inline void reciver_enqueue(CCo_Channel *chan, Coroutine_Ctx *reciver_ctx, void *dest) {
+    node_enqueue(&chan->recv_head, &chan->recv_tail, reciver_ctx, dest);
+}
+
+static inline Node *reciver_dequeue(CCo_Channel *chan) {
+    return node_dequeue(&chan->recv_head, &chan->recv_tail);
+}
+
+// =================== // Send - Recv queues // ===================
 
 
 // =========================== Buffer =============================
@@ -191,7 +158,8 @@ CCo_Channel *cco_make_chan(size_t payload_size, size_t buffer_capacity) {
 
 void cco_free_chan(CCo_Channel *chan) {
     if (chan->send_head != NULL || chan->recv_head != NULL) {
-        fprintf(stderr, "[WARNING]: Freeing a non-empty channel!\n");
+        fprintf(stderr, "[ERROR]: Freeing a non-empty channel!\n");
+        exit(1);
     }
     if (chan->buf.data != NULL) {
         free(chan->buf.data);
@@ -203,11 +171,10 @@ void cco_free_chan(CCo_Channel *chan) {
 void cco_send(CCo_Channel *chan, void *data) {
     pthread_mutex_lock(&chan->lock);
 
-
     // If there is a reciver ready we send the data and return
     if (chan->recv_tail != NULL) {
-        Reciver_Node *recv_node = reciver_dequeue(chan);
-        memcpy(recv_node->dest, data, chan->payload_size);
+        Node *recv_node = reciver_dequeue(chan);
+        memcpy(recv_node->data, data, chan->payload_size);
         recv_node->ctx->status = NOT_RUNNING;
         free(recv_node);
 
@@ -247,7 +214,7 @@ void cco_recv(CCo_Channel *chan, void *dest) {
 
     // If there is a sender ready we get the data and return
     if (chan->send_tail != NULL) {
-        Sender_Node *send_node = sender_dequeue(chan);
+        Node *send_node = sender_dequeue(chan);
         memcpy(dest, send_node->data, chan->payload_size);
         send_node->ctx->status = NOT_RUNNING;
         free(send_node);
