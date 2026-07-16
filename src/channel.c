@@ -203,6 +203,7 @@ void cco_free_chan(CCo_Channel *chan) {
 void cco_send(CCo_Channel *chan, void *data) {
     pthread_mutex_lock(&chan->lock);
 
+
     // If there is a reciver ready we send the data and return
     if (chan->recv_tail != NULL) {
         Reciver_Node *recv_node = reciver_dequeue(chan);
@@ -214,7 +215,15 @@ void cco_send(CCo_Channel *chan, void *data) {
         return;
     }
 
-    // If there is no reciver we block and enqueue
+    // If there is a non-full buffer we put there the data
+    if (chan->buf.data != NULL) {
+        if (buf_enqueue(chan, data) == 0) {
+            pthread_mutex_unlock(&chan->lock);
+            return;
+        }
+    }
+
+    // If there is no reciver and the buffer is full we block and enqueue
     sender_enqueue(chan, &current_running->ctx, data);
     current_running->ctx.status = BLOCKED;
 
@@ -225,6 +234,16 @@ void cco_send(CCo_Channel *chan, void *data) {
 
 void cco_recv(CCo_Channel *chan, void *dest) {
     pthread_mutex_lock(&chan->lock);
+
+    // If there is something in the buffer we pull from that
+    if (chan->buf.data != NULL) {
+        void *data = buf_dequeue(chan);
+        if (data != NULL) {
+            memcpy(dest, data, chan->payload_size);
+            pthread_mutex_unlock(&chan->lock);
+            return;
+        }
+    }
 
     // If there is a sender ready we get the data and return
     if (chan->send_tail != NULL) {
@@ -237,7 +256,7 @@ void cco_recv(CCo_Channel *chan, void *dest) {
         return;
     }
 
-    // If there is no sender we block and enqueue
+    // If there is no sender and the buffer is empty we block and enqueue
     reciver_enqueue(chan, &current_running->ctx, dest);
     current_running->ctx.status = BLOCKED;
 

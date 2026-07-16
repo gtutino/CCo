@@ -21,8 +21,8 @@ void reciver(CCo_Channel *data_chan, CCo_Channel *done_chan) {
 void cco_main(int argc, char **argv) {
     (void) argc;
     (void) argv;
-    CCo_Channel *data_chan = cco_make_chan(sizeof(int), 0);
-    CCo_Channel *done_chan = cco_make_chan(sizeof(char), 0);
+    CCo_Channel *data_chan = cco_make_chan(sizeof(int), 10);
+    CCo_Channel *done_chan = cco_make_chan(sizeof(char), 10);
 
     for (int i = 0; i < 1000; i++) {
         cco_run(worker, data_chan, i*10);

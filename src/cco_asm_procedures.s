@@ -60,9 +60,9 @@ cco_free_n_switch_ctx:
     movq %rdx, %rsp
     movq %rcx, %rbp
 
-    movq %rsi, %r12     /* Saving rsi because free can alter it */
+    pushq %rsi     /* Saving rsi because free can alter it */
     call free
-    movq %r12, %rdi
+    popq %rdi
     jmp cco_switch_ctx
 
 
