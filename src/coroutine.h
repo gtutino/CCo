@@ -41,4 +41,6 @@ struct Ctx_Node {
 // This is necessary, so each coroutine knows where to look when it need to do context switch
 extern thread_local Ctx_Node *current_running;
 
+void *cco_malloc(size_t size);
+
 #endif
