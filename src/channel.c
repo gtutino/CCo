@@ -97,11 +97,11 @@ static inline Node *sender_dequeue(CCo_Channel *chan) {
     return node_dequeue(&chan->send_head, &chan->send_tail);
 }
 
-static inline void reciver_enqueue(CCo_Channel *chan, Coroutine_Ctx *reciver_ctx, void *dest) {
-    node_enqueue(&chan->recv_head, &chan->recv_tail, reciver_ctx, dest);
+static inline void receiver_enqueue(CCo_Channel *chan, Coroutine_Ctx *receiver_ctx, void *dest) {
+    node_enqueue(&chan->recv_head, &chan->recv_tail, receiver_ctx, dest);
 }
 
-static inline Node *reciver_dequeue(CCo_Channel *chan) {
+static inline Node *receiver_dequeue(CCo_Channel *chan) {
     return node_dequeue(&chan->recv_head, &chan->recv_tail);
 }
 
@@ -188,9 +188,9 @@ void cco_free_chan(CCo_Channel *chan) {
 void cco_send(CCo_Channel *chan, void *data) {
     pthread_mutex_lock(&chan->lock);
 
-    // If there is a reciver ready we send the data and return
+    // If there is a receiver ready we send the data and return
     if (chan->recv_tail != NULL) {
-        Node *recv_node = reciver_dequeue(chan);
+        Node *recv_node = receiver_dequeue(chan);
         memcpy(recv_node->data, data, chan->payload_size);
         recv_node->ctx->status = NOT_RUNNING;
         free(recv_node);
@@ -207,7 +207,7 @@ void cco_send(CCo_Channel *chan, void *data) {
         }
     }
 
-    // If there is no reciver and the buffer is full we block and enqueue
+    // If there is no receiver and the buffer is full we block and enqueue
     sender_enqueue(chan, &current_running->ctx, data);
     current_running->ctx.status = BLOCKED;
 
@@ -224,24 +224,34 @@ void cco_recv(CCo_Channel *chan, void *dest) {
         void *data = buf_dequeue(chan);
         if (data != NULL) {
             memcpy(dest, data, chan->payload_size);
+
+            // If there is some sender in queue now it can put data in the buffer
+            if (chan->send_tail != NULL) {
+                Node *send_node = sender_dequeue(chan);
+                buf_enqueue(chan, send_node->data);
+                send_node->ctx->status = NOT_RUNNING;
+                free(send_node);
+            }
+
+            pthread_mutex_unlock(&chan->lock);
+            return;
+        }
+    }
+    else {
+        // If there is a sender ready we get the data and return
+        if (chan->send_tail != NULL) {
+            Node *send_node = sender_dequeue(chan);
+            memcpy(dest, send_node->data, chan->payload_size);
+            send_node->ctx->status = NOT_RUNNING;
+            free(send_node);
+
             pthread_mutex_unlock(&chan->lock);
             return;
         }
     }
 
-    // If there is a sender ready we get the data and return
-    if (chan->send_tail != NULL) {
-        Node *send_node = sender_dequeue(chan);
-        memcpy(dest, send_node->data, chan->payload_size);
-        send_node->ctx->status = NOT_RUNNING;
-        free(send_node);
-
-        pthread_mutex_unlock(&chan->lock);
-        return;
-    }
-
-    // If there is no sender and the buffer is empty we block and enqueue
-    reciver_enqueue(chan, &current_running->ctx, dest);
+    // If there is no sender or the buffer is empty we block and enqueue
+    receiver_enqueue(chan, &current_running->ctx, dest);
     current_running->ctx.status = BLOCKED;
 
     pthread_mutex_unlock(&chan->lock);
@@ -250,12 +260,12 @@ void cco_recv(CCo_Channel *chan, void *dest) {
 
 
 // This two functions checks if a channel can send or can recieve,
-// so basically if there is a waiting reciever/sender
+// so basically if there is a waiting receiver/sender
 // (or if there is space in the buffer).
 //
 // [NOTE]
-// If the channel can send/recieve the mutex is NOT
-// unlocked to prevent other coroutines to send/recieve messages.
+// If the channel can send/receive the mutex is NOT
+// unlocked to prevent other coroutines to send/receive messages.
 // So the caller MUST take account of unlocking.
 static bool chan_can_send(CCo_Channel *chan) {
     if (pthread_mutex_trylock(&chan->lock) == 0) {
@@ -355,6 +365,6 @@ size_t cco_select_impl(cco_chan_func first_fun, ...) {
         return choosen_channel_index + 1;
     }
 
-    // No channel found
+    // No channels available
     return 0;
 }

@@ -32,7 +32,7 @@ void cco_main(int argc, char **argv) {
     (void) argv;
     CCo_Channel *data_chan1 = cco_make_chan(sizeof(int), 10);
     CCo_Channel *data_chan2 = cco_make_chan(sizeof(int), 10);
-    CCo_Channel *done_chan = cco_make_chan(sizeof(char), 1);
+    CCo_Channel *done_chan = cco_make_chan(sizeof(char), 0);
 
     for (int i = 0; i < 1000; i++) {
         if (i%2 == 0) {
