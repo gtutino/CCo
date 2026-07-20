@@ -1,3 +1,4 @@
+#define _XOPEN_SOURCE 600
 #include "../include/cco.h"
 #include "coroutine.h"
 #include "common.h"
@@ -5,6 +6,8 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <pthread.h>
+#include <stdbool.h>
+#include <stdarg.h>
 
 typedef struct Node Node;
 struct Node {
@@ -28,9 +31,15 @@ struct CCo_Channel {
     Node *recv_head;
     Node *recv_tail;
     size_t payload_size;
-    pthread_mutex_t lock;
     Buffer buf;
+    pthread_mutex_t lock;
 };
+
+typedef struct {
+    cco_chan_func func;
+    CCo_Channel *chan;
+    void *data;
+} Chan_Args;
 
 
 // =========================== Queue =============================
@@ -101,11 +110,11 @@ static inline Node *reciver_dequeue(CCo_Channel *chan) {
 
 // =========================== Buffer =============================
 
-static int buf_enqueue(CCo_Channel *chan, void *data) {
+static bool buf_enqueue(CCo_Channel *chan, void *data) {
 
     // Buffer full
     if (chan->buf.count == chan->buf.capacity) {
-        return 1;
+        return false;
     }
 
     memcpy(
@@ -116,7 +125,7 @@ static int buf_enqueue(CCo_Channel *chan, void *data) {
 
     chan->buf.count++;
     chan->buf.tail = (chan->buf.tail + 1) % chan->buf.capacity;
-    return 0;
+    return true;
 }
 
 static void *buf_dequeue(CCo_Channel *chan) {
@@ -140,8 +149,15 @@ CCo_Channel *cco_make_chan(size_t payload_size, size_t buffer_capacity) {
     chan->recv_head = NULL;
     chan->recv_tail = NULL;
     chan->payload_size = payload_size;
-    pthread_mutex_init(&chan->lock, NULL);
 
+    // Recursive mutex needed for the cco_select function
+    pthread_mutexattr_t attr;
+    pthread_mutexattr_init(&attr);
+    pthread_mutexattr_settype(&attr, PTHREAD_MUTEX_RECURSIVE);
+    pthread_mutex_init(&chan->lock, &attr);
+    pthread_mutexattr_destroy(&attr);
+
+    // Buffer init
     if (buffer_capacity > 0) {
         chan->buf.data = cco_malloc(payload_size*buffer_capacity);
         chan->buf.count = 0;
@@ -164,6 +180,7 @@ void cco_free_chan(CCo_Channel *chan) {
     if (chan->buf.data != NULL) {
         free(chan->buf.data);
     }
+    pthread_mutex_destroy(&chan->lock);
     free(chan);
 }
 
@@ -184,7 +201,7 @@ void cco_send(CCo_Channel *chan, void *data) {
 
     // If there is a non-full buffer we put there the data
     if (chan->buf.data != NULL) {
-        if (buf_enqueue(chan, data) == 0) {
+        if (buf_enqueue(chan, data)) {
             pthread_mutex_unlock(&chan->lock);
             return;
         }
@@ -229,4 +246,115 @@ void cco_recv(CCo_Channel *chan, void *dest) {
 
     pthread_mutex_unlock(&chan->lock);
     cco_yield();
+}
+
+
+// This two functions checks if a channel can send or can recieve,
+// so basically if there is a waiting reciever/sender
+// (or if there is space in the buffer).
+//
+// [NOTE]
+// If the channel can send/recieve the mutex is NOT
+// unlocked to prevent other coroutines to send/recieve messages.
+// So the caller MUST take account of unlocking.
+static bool chan_can_send(CCo_Channel *chan) {
+    if (pthread_mutex_trylock(&chan->lock) == 0) {
+        if (chan->recv_tail != NULL) {
+            return true;
+        }
+        if (chan->buf.data != NULL && chan->buf.count < chan->buf.capacity) {
+            return true;
+        }
+        pthread_mutex_unlock(&chan->lock);
+        return false;
+    }
+    return false;
+}
+
+static bool chan_can_recv(CCo_Channel *chan) {
+    if (pthread_mutex_trylock(&chan->lock) == 0) {
+        if (chan->send_tail != NULL) {
+            return true;
+        }
+        if (chan->buf.data != NULL && chan->buf.count > 0) {
+            return true;
+        }
+        pthread_mutex_unlock(&chan->lock);
+        return false;
+    }
+    return false;
+}
+
+size_t cco_select_impl(cco_chan_func first_fun, ...) {
+    va_list args;
+    va_start(args, first_fun);
+
+    Chan_Args ca[16]; // TODO: in the readme tell about this max 16.
+    int ca_index = 0;
+
+    cco_chan_func func = first_fun;
+    CCo_Channel *chan;
+    void *data;
+    bool chan_available;
+
+    while (true) {
+        chan = va_arg(args, CCo_Channel*);
+        data = va_arg(args, void*);
+
+        if (func == cco_send) {
+            chan_available = chan_can_send(chan);
+        }
+        else if (func == cco_recv) {
+            chan_available = chan_can_recv(chan);
+        }
+        else {
+            fprintf(stderr, "[ERROR]: Unreachable.\n");
+            exit(1);
+        }
+
+        if (chan_available) {
+            if (ca_index < 16) {
+                ca[ca_index] = (Chan_Args) {
+                    .func = func,
+                    .chan = chan,
+                    .data = data
+                };
+                ca_index++;
+            }
+            else {
+                fprintf(stderr, "[ERROR]: Max num of functions is 16.\n");
+                exit(1);
+            }
+        }
+
+        func = va_arg(args, cco_chan_func);
+
+        if (func == NULL) {
+            va_end(args);
+            break;
+        }
+    }
+
+    if (ca_index > 0) {
+        int choosen_channel_index = rand() % ca_index;
+
+        // Unlock all the other channels
+        for (int i = 0; i < ca_index; i++) {
+            if (i != choosen_channel_index) {
+                pthread_mutex_unlock(&ca[i].chan->lock);
+            }
+        }
+
+        // Perform the request
+        func = ca[choosen_channel_index].func;
+        chan = ca[choosen_channel_index].chan;
+        data = ca[choosen_channel_index].data;
+
+        func(chan, data);
+        pthread_mutex_unlock(&chan->lock);
+        return choosen_channel_index + 1;
+    }
+
+    // No channel found
+    return 0;
 }

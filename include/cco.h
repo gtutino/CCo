@@ -57,7 +57,10 @@ void cco_send(CCo_Channel *chan, void *data);
 void cco_recv(CCo_Channel *chan, void *dest);
 
 
-// Select [TODO: better description].
+// The select function takes multiple channels action (send/recv)
+// and randomly choose one of the available channels, doing the action.
+// The return number corresponds to the number of used channel
+// (starting from 1), 0 means that no channel was available.
 //
 // Example:
 // cco_select(
@@ -67,8 +70,12 @@ void cco_recv(CCo_Channel *chan, void *dest);
 //     ...
 //     ..
 //  );
-// size_t cco_select_impl(char arg_start, ...);
-// #define cco_select(arg_start, ...) cco_run_impl(arg_start, __VA_ARGS__, NULL)
+//
+// [NOTE]
+// Right now the max amout of actions is 16.
+typedef void (*cco_chan_func)(CCo_Channel *chan, void *data);
+size_t cco_select_impl(cco_chan_func first_fun, ...);
+#define cco_select(first_fun, ...) cco_select_impl(first_fun, __VA_ARGS__, NULL)
 
 
 // Context switch to the next coroutine.
