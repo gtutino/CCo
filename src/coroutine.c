@@ -132,7 +132,7 @@ int main(int argc, char **argv) {
     }
 
     cco_save_stack_pointers(&stack_rsp, &stack_rbp);
-    cco_run(cco_main, 2, argc, argv);
+    cco_run(cco_main, argc, argv);
 }
 
 
