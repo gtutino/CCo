@@ -31,12 +31,16 @@ Then there is a global queue that can be used to pull and push coroutines by all
 A thread will push to the global queue if its local coroutines are more of a fixed threshold (based on the total number of coroutines) and pull in the opposite situation, in this way all the threads will have (approximately) the same amount of coroutines.\
 This behaviour happens every time there is a context switch, since there is no preemption if the coroutines don't switch frequently there can be some misalignments.
 
+Termination is handled by just looking at the total number of coroutines, when it reaches 0 the program terminates.
+
 ### Channels
 
 Channels can be used by multiple coroutines without limits, so they are general MxN channels.\
 They can be buffered (with a fixed size) or unbuffered, so the interaction can also be async.\
-The order of messages is **always** preserved.\
-A channel structure is basicall composed of two queues (send and recv queue) and the message data is just copied to destination through memcpy.
+The order of messages is **always** preserved.
+
+A channel structure is basicall composed of two queues (send and recv queue) and the message data is just copied to destination through memcpy. All channels operation are (obviously) locked because they can be accessed by multiple threads.\
+The mutex are of type `PTHREAD_MUTEX_RECURSIVE`, this is needed because the select statement locks prevently the available channels and then do send/recv on the selected one, locking two times the same mutex.
 
 ## Limitations
 - Coroutines can take up to 6 args of maximum 8 bytes each.
